@@ -8,11 +8,15 @@ from find_chrome_util import find_chrome_util
 
 
 def run(playwright: Playwright) -> None:
-    browser = playwright.chromium.launch(headless=True, executable_path=find_chrome_util())
+    browser = playwright.chromium.launch(headless=False, executable_path=find_chrome_util())
     context = browser.new_context(color_scheme="dark", storage_state="auth.json")
     context.set_default_timeout(10000)  # 设置默认10s
     page = context.new_page()
     page.goto("https://api.ephone.chat/login")
+
+    # page.get_by_role("button", name="今日不再提醒").click()
+    if page.get_by_role("button", name="确定").is_visible():
+        page.get_by_role("button", name="确定").click()
 
     load_dotenv()
     page.get_by_role("textbox", name="用户名/邮箱").click()
@@ -22,9 +26,9 @@ def run(playwright: Playwright) -> None:
     page.get_by_role("textbox", name="密码").press("Enter")
     page.get_by_role("button", name="登录").click()
 
-    # page.get_by_role("button", name="今日不再提醒").click()
     if page.get_by_role("button", name="确定").is_visible():
         page.get_by_role("button", name="确定").click()
+
     page.get_by_role("link", name="工作台").click()
     page.get_by_role("link", name=" 工作台").click()
     page.get_by_text("签到日历").click()
