@@ -1,6 +1,7 @@
 import os
 import platform
 import re
+import time
 
 from dotenv import load_dotenv
 from playwright.sync_api import Playwright, sync_playwright, expect
@@ -16,6 +17,8 @@ def run(playwright: Playwright) -> None:
     page.goto("https://api.ephone.chat/login")
 
     # page.get_by_role("button", name="今日不再提醒").click()
+    # page.get_by_role("button", name="确定").click()
+    page.wait_for_load_state(state="networkidle", timeout=5000)
     if page.get_by_role("button", name="确定").is_visible():
         page.get_by_role("button", name="确定").click()
 
