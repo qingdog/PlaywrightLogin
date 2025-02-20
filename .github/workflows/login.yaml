@@ -32,7 +32,7 @@ jobs:
 
       - name: 运行登录脚本
         env:
-          USERNAME189: ${{ secrets.USERNAME189 }}  #
-          PASSWORD189: ${{ secrets.PASSWORD189 }}  #
+          api_ephone_name: ${{ secrets.API_EPHONE_NAME }}  #
+          api_ephone_pass: ${{ secrets.API_EPHONE_PASS }}  #
         run: |
           python index.py          
