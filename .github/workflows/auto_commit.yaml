@@ -1,0 +1,29 @@
+name: auto-commit  
+on:  
+  workflow_dispatch:  
+  schedule:  
+    - cron: "0 0 1 * *"  # 每个月的第一天的午夜 12:00 执行一次（UTC时间）  
+
+jobs:  
+  auto-commit:  
+    runs-on: ubuntu-latest  
+    steps:  
+      - name: 切换到存储库  
+        uses: actions/checkout@v3  
+
+      - name: 更新日期追加到文件  
+        run: |  
+          echo $(date '+%Y-%m-%d %H:%M:%S') >> auto_commit.txt  
+
+      - name: git-config  
+        run: |  
+          git config user.name "github-actions[bot]"  
+          git config user.email "github-actions[bot]@users.noreply.github.com"  
+
+      - name: commit-push  
+        run: |  
+          git add .  
+          git commit -m "Automated commit from GitHub Actions" || echo "No changes to commit..."  
+          git push  
+        env:  
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
