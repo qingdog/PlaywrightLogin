@@ -1,4 +1,5 @@
 import os
+import platform
 import re
 
 from dotenv import load_dotenv
@@ -8,7 +9,7 @@ from find_chrome_util import find_chrome_util
 
 
 def run(playwright: Playwright) -> None:
-    browser = playwright.chromium.launch(headless=False, executable_path=find_chrome_util())
+    browser = playwright.chromium.launch(headless=platform.system() != "Windows", executable_path=find_chrome_util())
     context = browser.new_context(color_scheme="dark", storage_state="auth.json")
     context.set_default_timeout(10000)  # 设置默认10s
     page = context.new_page()
