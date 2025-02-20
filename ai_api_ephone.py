@@ -27,7 +27,6 @@ def run(playwright: Playwright) -> None:
     page.get_by_role("textbox", name="用户名/邮箱").fill(os.getenv("api_ephone_name"))
     page.get_by_role("textbox", name="用户名/邮箱").press("Tab")
     page.get_by_role("textbox", name="密码").fill(os.getenv("api_ephone_pass"))
-    page.get_by_role("textbox", name="密码").press("Enter")
     page.get_by_role("button", name="登录").click()
 
     if page.get_by_role("button", name="确定").is_visible():
@@ -37,10 +36,15 @@ def run(playwright: Playwright) -> None:
     page.get_by_role("link", name=" 工作台").click()
     page.get_by_text("签到日历").click()
     print(page.get_by_text("👋 你好，17597658361759765836 7694当前余额").text_content())
-    page.get_by_role("button", name=" 去签到").click()
-    page.get_by_text("签到成功").click()
-    page.get_by_text("签到成功").text_content()
-    expect(page.get_by_label("success type")).to_contain_text("签到成功")
+
+    try:
+        page.get_by_role("button", name=" 去签到").click()
+        page.get_by_text("签到成功").click()
+        page.get_by_text("签到成功").text_content()
+        expect(page.get_by_label("success type")).to_contain_text("签到成功")
+    except Exception as e:
+        print("未找到签到按钮，疑似已经登录。。。")
+        raise e
 
     # ---------------------
     context.storage_state(path="auth.json")
