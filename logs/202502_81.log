@@ -1,0 +1,30 @@
+[2025-02-21_09:31:26] - [ai_api_ephone.py:41] INFO 👋 你好，17597658361759765836 7694当前余额¥0.36累计消费¥0.00累计请求0
+[2025-02-21_09:31:36] - [ai_api_ephone.py:49] INFO 
+未找到签到按钮，疑似已经签到······
+
+[2025-02-21_09:31:36] - [ai_api_ephone.py:50] ERROR Locator.click: Timeout 10000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=" 去签到")
+Traceback (most recent call last):
+  File "D:\mytest\PlaywrightLogin\ai_api_ephone.py", line 44, in run
+    page.get_by_role("button", name=" 去签到").click()
+  File "D:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\playwright\sync_api\_generated.py", line 15464, in click
+    self._sync(
+  File "D:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+    return task.result()
+           ^^^^^^^^^^^^^
+  File "D:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\playwright\_impl\_locator.py", line 156, in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\playwright\_impl\_frame.py", line 488, in click
+    await self._channel.send("click", locals_to_params(locals()))
+  File "D:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\playwright\_impl\_connection.py", line 61, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\playwright\_impl\_connection.py", line 528, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TimeoutError: Locator.click: Timeout 10000ms exceeded.
+Call log:
+  - waiting for get_by_role("button", name=" 去签到")
+
+[2025-02-21_09:31:36] - [ai_api_ephone.py:52] INFO 👋 你好，17597658361759765836 7694当前余额¥0.36累计消费¥0.00累计请求0

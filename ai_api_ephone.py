@@ -37,7 +37,8 @@ def run(playwright: Playwright) -> None:
     page.get_by_role("link", name="工作台").click()
     page.get_by_role("link", name=" 工作台").click()
     page.get_by_text("签到日历").click()
-    print(page.get_by_text("👋 你好，17597658361759765836 7694当前余额").text_content())
+    logging.getLogger().setLevel(logging.INFO)
+    logging.info(page.get_by_text("👋 你好，17597658361759765836 7694当前余额").text_content())
 
     try:
         page.get_by_role("button", name=" 去签到").click()
@@ -45,8 +46,10 @@ def run(playwright: Playwright) -> None:
         page.get_by_text("签到成功").text_content()
         expect(page.get_by_label("success type")).to_contain_text("签到成功")
     except Exception as e:
-        print("\n未找到签到按钮，疑似已经登录······\n")
+        logging.info("\n未找到签到按钮，疑似已经签到······\n")
         logging.error(e, exc_info=True)
+
+        logging.info(page.get_by_text("👋 你好，17597658361759765836 7694当前余额").text_content())
 
     # ---------------------
     context.storage_state(path="auth.json")
