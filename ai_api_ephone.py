@@ -1,3 +1,4 @@
+import logging
 import os
 import platform
 import re
@@ -15,10 +16,11 @@ def run(playwright: Playwright) -> None:
     context.set_default_timeout(10000)  # 设置默认10s
     page = context.new_page()
     page.goto("https://api.ephone.chat/login")
+    # 等待网络请求闲置至少 500ms，即没有新的请求发送或进行中。等待 JavaScript 运行完毕、数据加载完成
+    page.wait_for_load_state(state="networkidle", timeout=5000)  # 5s后超时
 
     # page.get_by_role("button", name="今日不再提醒").click()
     # page.get_by_role("button", name="确定").click()
-    page.wait_for_load_state(state="networkidle", timeout=5000)
     if page.get_by_role("button", name="确定").is_visible():
         page.get_by_role("button", name="确定").click()
 
@@ -43,8 +45,8 @@ def run(playwright: Playwright) -> None:
         page.get_by_text("签到成功").text_content()
         expect(page.get_by_label("success type")).to_contain_text("签到成功")
     except Exception as e:
-        print("未找到签到按钮，疑似已经登录。。。")
-        raise e
+        print("\n未找到签到按钮，疑似已经登录······\n")
+        logging.error(e, exc_info=True)
 
     # ---------------------
     context.storage_state(path="auth.json")
