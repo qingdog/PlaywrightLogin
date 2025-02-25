@@ -42,9 +42,11 @@ def run(playwright: Playwright) -> None:
 
     try:
         page.get_by_role("button", name=" 去签到").click()
-        page.get_by_text("签到成功").click()
-        page.get_by_text("签到成功").text_content()
+        # page.get_by_text("签到成功").click()
+        # logging.info(page.get_by_text("签到成功").text_content())
+        page.wait_for_load_state(state="load", timeout=1000)  # 1s后超时
         expect(page.get_by_label("success type")).to_contain_text("签到成功")
+        expect(page.get_by_text("签到成功")).to_be_visible()
     except Exception as e:
         logging.info("\n未找到签到按钮，疑似已经签到······\n")
         logging.error(e, exc_info=True)
@@ -64,5 +66,6 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # main()
     # os.system("playwright codegen --load-storage=auth.json --color-scheme=dark https://api.ephone.chat/ --save-storage=auth.json")
+    os.system("playwright codegen --color-scheme=dark https://api.ephone.chat/ ")
