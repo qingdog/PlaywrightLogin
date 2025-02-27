@@ -46,7 +46,10 @@ def run(playwright: Playwright) -> None:
         # logging.info(page.get_by_text("签到成功").text_content())
         page.wait_for_load_state(state="load", timeout=1000)  # 1s后超时
         # 使用更具体的选择器 document.querySelectorAll("div[role='alert'][aria-label='success type'].semi-toast-success")
-        expect(page.locator("div[role='alert'][aria-label='success type'].semi-toast-success")).to_contain_text("签到成功")
+
+        logging.info(page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").last.text_content())
+        logging.warning(page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").text_content())
+        expect(page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").last).to_contain_text("签到成功")
         # expect(page.get_by_label("success type")).to_contain_text("签到成功")
         # expect(page.get_by_text("签到成功")).to_be_visible()
     except Exception as e:
