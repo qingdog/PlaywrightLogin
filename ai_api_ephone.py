@@ -5,6 +5,7 @@ import re
 import time
 
 from dotenv import load_dotenv
+from minium.externlib.wechat_mp_inspector.utils import catch
 from playwright.sync_api import Playwright, sync_playwright, expect
 
 from find_chrome_util import find_chrome_util
@@ -17,7 +18,8 @@ def run(playwright: Playwright) -> None:
     page = context.new_page()
     page.goto("https://api.ephone.chat/login")
     # 等待网络请求闲置至少 500ms，即没有新的请求发送或进行中。等待 JavaScript 运行完毕、数据加载完成
-    page.wait_for_load_state(state="networkidle", timeout=5000)  # 5s后超时
+    try: page.wait_for_load_state(state="networkidle", timeout=5000)  # 5s后超时
+    except Exception as e: logging.error(e, exc_info=True)
 
     # page.get_by_role("button", name="今日不再提醒").click()
     # page.get_by_role("button", name="确定").click()
@@ -44,19 +46,33 @@ def run(playwright: Playwright) -> None:
         page.get_by_role("button", name=" 去签到").click()
         # page.get_by_text("签到成功").click()
         # logging.info(page.get_by_text("签到成功").text_content())
-        page.wait_for_load_state(state="load", timeout=1000)  # 1s后超时
+        try: page.wait_for_load_state(state="load", timeout=1000)  # 1s后超时
+        except Exception as e: logging.error(e, exc_info=True)
         # 使用更具体的选择器 document.querySelectorAll("div[role='alert'][aria-label='success type'].semi-toast-success")
 
+        alert_success_locator = page.locator("div[role='alert'][aria-label='success type'].semi-toast-success")
+        # 如果alert弹窗元素超过2个
+        if alert_success_locator.count() >= 2:
+            all_outer_html = alert_success_locator.evaluate_all("elements => elements.map(e => e.outerHTML)")
+            logging.warning(f"all_outer_html: {all_outer_html}")
+
+        logging.info(page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").first.text_content())
         logging.info(page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").last.text_content())
-        logging.warning(page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").text_content())
+
         expect(page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").last).to_contain_text("签到成功")
         # expect(page.get_by_label("success type")).to_contain_text("签到成功")
         # expect(page.get_by_text("签到成功")).to_be_visible()
+        """last_alert_text = page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").last.text_content()
+        if "签到成功" in last_alert_text:
+            logging.info("成功签到！")
+        else:
+            logging.warning("未找到签到成功的提示！")"""
     except Exception as e:
         logging.info("未找到签到按钮，疑似已经签到······\n")
         logging.error(e, exc_info=True)
-
-        page.wait_for_load_state(state="networkidle", timeout=1000)  # 1s后超时
+    finally:
+        try: page.wait_for_load_state(state="networkidle", timeout=1000)  # 1s后超时
+        except Exception as e: logging.error(e, exc_info=True)
         logging.info(page.get_by_text("👋 你好，17597658361759765836 7694当前余额").text_content())
 
     # ---------------------
