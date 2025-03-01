@@ -47,16 +47,12 @@ def run(playwright: Playwright) -> None:
         except Exception as e: logging.error(e, exc_info=True)
         # 使用更具体的选择器 document.querySelectorAll("div[role='alert'][aria-label='success type'].semi-toast-success")
 
-        alert_success_locator = page.locator("div[role='alert'][aria-label='success type'].semi-toast-success")
-        # 如果alert弹窗元素超过2个
-        if alert_success_locator.count() >= 2:
-            all_outer_html = alert_success_locator.evaluate_all("elements => elements.map(e => e.outerHTML)")
-            logging.warning(f"all_outer_html: {all_outer_html}")
+        alert_success_locator = page.locator('div[role="alert"][aria-label="success type"]')
+        all_outer_text = alert_success_locator.evaluate_all("elements => elements.map(e => e.outerText)")
+        logging.info(f"all_outer_text: {all_outer_text}")
 
-        logging.info(page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").first.text_content())
-        logging.info(page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").last.text_content())
-
-        expect(page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").last).to_contain_text("签到成功")
+        # 断言为签到成功
+        expect(alert_success_locator.last).to_contain_text("签到成功")
         # expect(page.get_by_label("success type")).to_contain_text("签到成功")
         # expect(page.get_by_text("签到成功")).to_be_visible()
         """last_alert_text = page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").last.text_content()
