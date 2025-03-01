@@ -1,11 +1,8 @@
 import logging
 import os
 import platform
-import re
-import time
 
 from dotenv import load_dotenv
-from minium.externlib.wechat_mp_inspector.utils import catch
 from playwright.sync_api import Playwright, sync_playwright, expect
 
 from find_chrome_util import find_chrome_util
