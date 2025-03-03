@@ -47,25 +47,15 @@ def run(playwright: Playwright) -> None:
         except TimeoutError as e:
             check_button = True
             raise e
-        # page.get_by_text("签到成功").click()
-        # logging.info(page.get_by_text("签到成功").text_content())
-        try: page.wait_for_load_state(state="load", timeout=1000)  # 1s后超时
+        try: page.wait_for_load_state(state="load", timeout=1000)  # 最长只等待1s，不管是否load完成，就进行下一步
         except Exception as e: logging.error(e, exc_info=True)
-        # 使用更具体的选择器 document.querySelectorAll("div[role='alert'][aria-label='success type'].semi-toast-success")
 
         alert_success_locator = page.locator('div[role="alert"][aria-label="success type"]')
-        logging.info(f"all_outer_text: {alert_success_locator.evaluate_all("elements => elements.map(e => e.outerText)")}")
-
         # 断言为签到成功
         expect(alert_success_locator.last).to_contain_text("签到成功")
+
+        # 疑似在断言时间里，产生了等待1s的行为（导致前面打印失败了，但断言成功了）。这里进行重新打印
         logging.info(f"all_outer_text: {alert_success_locator.evaluate_all("elements => elements.map(e => e.outerText)")}")
-        # expect(page.get_by_label("success type")).to_contain_text("签到成功")
-        # expect(page.get_by_text("签到成功")).to_be_visible()
-        """last_alert_text = page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").last.text_content()
-        if "签到成功" in last_alert_text:
-            logging.info("成功签到！")
-        else:
-            logging.warning("未找到签到成功的提示！")"""
     except Exception as e:
         if check_button:
             logging.warning("未找到签到按钮，疑似已经签到······")
@@ -78,7 +68,7 @@ def run(playwright: Playwright) -> None:
         logging.info(page.get_by_text("👋 你好，17597658361759765836 7694当前余额").text_content())
 
     # ---------------------
-    context.storage_state(path="auth.json")
+    # context.storage_state(path="auth.json") # 不保存状态
     context.close()
     browser.close()
 
