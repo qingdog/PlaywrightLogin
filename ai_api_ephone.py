@@ -3,7 +3,7 @@ import os
 import platform
 
 from dotenv import load_dotenv
-from playwright.sync_api import Playwright, sync_playwright, expect
+from playwright.sync_api import Playwright, sync_playwright, expect, TimeoutError
 
 from find_chrome_util import find_chrome_util
 
@@ -44,7 +44,7 @@ def run(playwright: Playwright) -> None:
     try:
         try:
             page.get_by_role("button", name=" 去签到").click()
-        except playwright._impl._errors.TimeoutError as e:
+        except TimeoutError as e:
             check_button = True
             raise e
         # page.get_by_text("签到成功").click()
