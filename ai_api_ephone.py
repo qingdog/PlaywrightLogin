@@ -38,9 +38,15 @@ def run(playwright: Playwright) -> None:
     page.get_by_text("签到日历").click()
     logging.getLogger().setLevel(logging.INFO)
     logging.info(page.get_by_text("👋 你好，17597658361759765836 7694当前余额").text_content())
-
+    
+    
+    check_button = False
     try:
-        page.get_by_role("button", name=" 去签到").click()
+        try:
+            page.get_by_role("button", name=" 去签到").click()
+        except playwright._impl._errors.TimeoutError as e:
+            check_button = True
+            raise e
         # page.get_by_text("签到成功").click()
         # logging.info(page.get_by_text("签到成功").text_content())
         try: page.wait_for_load_state(state="load", timeout=1000)  # 1s后超时
@@ -48,11 +54,11 @@ def run(playwright: Playwright) -> None:
         # 使用更具体的选择器 document.querySelectorAll("div[role='alert'][aria-label='success type'].semi-toast-success")
 
         alert_success_locator = page.locator('div[role="alert"][aria-label="success type"]')
-        all_outer_text = alert_success_locator.evaluate_all("elements => elements.map(e => e.outerText)")
-        logging.info(f"all_outer_text: {all_outer_text}")
+        logging.info(f"all_outer_text: {alert_success_locator.evaluate_all("elements => elements.map(e => e.outerText)")}")
 
         # 断言为签到成功
         expect(alert_success_locator.last).to_contain_text("签到成功")
+        logging.info(f"all_outer_text: {alert_success_locator.evaluate_all("elements => elements.map(e => e.outerText)")}")
         # expect(page.get_by_label("success type")).to_contain_text("签到成功")
         # expect(page.get_by_text("签到成功")).to_be_visible()
         """last_alert_text = page.locator("div[role='alert'][aria-label='success type'].semi-toast-success").last.text_content()
@@ -61,8 +67,11 @@ def run(playwright: Playwright) -> None:
         else:
             logging.warning("未找到签到成功的提示！")"""
     except Exception as e:
-        logging.info("未找到签到按钮，疑似已经签到······\n")
-        logging.error(e, exc_info=True)
+        if check_button:
+            logging.warning("未找到签到按钮，疑似已经签到······")
+            logging.warning(e, exc_info=True)
+        else:
+            logging.error(e, exc_info=True)
     finally:
         try: page.wait_for_load_state(state="networkidle", timeout=1000)  # 1s后超时
         except Exception as e: logging.error(e, exc_info=True)
