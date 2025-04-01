@@ -3,7 +3,8 @@ on:
   workflow_dispatch:  
   schedule:  
     - cron: "0 0 1 * *"  # 每个月的第一天的午夜 12:00 执行一次（UTC时间）  
-
+permissions:  
+  contents: write
 jobs:  
   auto-commit:  
     runs-on: ubuntu-latest  
