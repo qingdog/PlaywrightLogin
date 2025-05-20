@@ -83,7 +83,7 @@ def get_notch_location(bg_path, hx_path):
     x, y = max_loc
 
     # 显示灰度化、高斯模糊、降噪、提取边缘轮廓 后的匹配位置
-    show_draw_notch_box(hx_path, bg_path, max_val, x, y)
+    #show_draw_notch_box(hx_path, bg_path, max_val, x, y)
     return x  # 返回横坐标即可
 
 
@@ -219,13 +219,10 @@ def test_simulate_slider():
         
     chrome_port = start_remote_chrome_port()
     with sync_playwright() as p:
-        print(1)
         browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{chrome_port}")
-        print(11)
         # browser = p.chromium.launch(executable_path=chrome_executable_path, headless=False)
         context = browser.contexts[0]
         page = context.pages[0]
-        print(111)
         # 打印 navigator.webdriver 的值
         print(f"navigator.webdriver: {page.evaluate('navigator.webdriver')}")
 
@@ -390,6 +387,6 @@ if __name__ == "__main__":
           }
         });
     """
-    main(page_url="https://api.ephone.chat/login?expired=true", page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-16)
+    main(page_url="https://api.ephone.chat/login?expired=true", page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-12)
     
     #test_simulate_slider()
