@@ -70,7 +70,7 @@ def run(playwright: Playwright) -> None:
 
         alert_success_locator = page.locator('div[role="alert"][aria-label="success type"]')
         # 断言为签到成功
-        try: expect(alert_success_locator.last).to_contain_text("验证成功")
+        try: expect(page.locator("span.semi-toast-content-text").last).to_contain_text("验证成功")
         except Exception as e: logging.error(e, exc_info=True)
         page.get_by_role("button", name=" 去签到").click()
         
