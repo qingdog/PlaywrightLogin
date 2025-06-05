@@ -66,7 +66,7 @@ def get_notch_location(bg_path, hx_path):
     res = cv2.matchTemplate(apply_canny(hx_path), apply_canny(bg_path), cv2.TM_CCOEFF_NORMED)
     # 从匹配结果中获取匹配度最高的位置
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-    print(f"最大得分为：{max_val} 最佳匹配点为：{max_loc}")
+    #print(f"最大得分为：{max_val} 最佳匹配点为：{max_loc}")
 
     ################################
     h, w = res.shape
@@ -76,7 +76,7 @@ def get_notch_location(bg_path, hx_path):
         for x in range(w)
     ]
     sorted_points = sorted(points, key=lambda p: p[1], reverse=True)
-    for i, (pt, score) in enumerate(sorted_points[:10]):
+    for i, (pt, score) in enumerate(sorted_points[:3]):
         print(f"{i + 1}. 匹配点: {pt}, 得分: {score}")
 
     # 获取匹配位置的左上角坐标
@@ -318,7 +318,21 @@ def main(background_css, slider_css, page_url=None, page_open_func=page_open, pa
         #page.wait_for_timeout(30 * 1000)
 
 def validate(page, background_css, slider_css, page_url=None, page_open_func=page_open, page_evaluate="document.baseURI", 
-         download_src_func=download_src, background_size=None, slider_size=None, slider_down_css_xpath=None, distance_correction=0):
+         download_src_func=download_src, background_size=None, slider_size=None, slider_down_css_xpath=None, distance_correction=0, 
+         validate_success_css=None):
+    '''
+    :param background_css:背景图片css或xpath
+    :param slider_css:滑块图片css或xpath
+    :param page_open_func:可保持默认或自定义打开页面函数并执行自定义的js
+    :param page_evaluate:自定义的js
+    :param download_src_func:下载两张图片的函数，默认只支持base64和url
+    :param background_size:用于缩放图片确定距离比例
+    :param slider_size:用于缩放图片确定距离比例
+    :param slider_down_css_xpath:滑块图片下方滑动块的css（滑块图片不能直接滑动需要使用这个）
+    :param distance_correction:距离_校正（识别出缺口距离后会加上这个）
+    :param validate_success_css:验证成功css（用于重试）
+    :return:None
+    '''
     # 打开页面
     page_open_func(page, page_url, page_evaluate=page_evaluate)
     # 下载图片
@@ -336,18 +350,26 @@ def validate(page, background_css, slider_css, page_url=None, page_open_func=pag
         #distance_notch += -12
         pass
     simulate_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath)
+    
 
-    try:
-        #page.wait_for_timeout(2 * 1000)
-        page.wait_for_timeout(1.5 * 1000)
-        # 重新获取 Base64 图片数据，如果获取到了则说明验证码失败了
-        page.locator(background_css).wait_for(timeout=500)
-        # 验证失败了，再执行一次滑动逻辑...
-        background_filename, slider_filename = download_src_func(page, background_css, slider_css, background_size, slider_size)
-        distance_notch = get_notch_location(background_filename, slider_filename)
-        simulate_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath)
-    except Exception as e:
-        print("验证码通过---登录成功！")
+    if validate_success_css:
+        page.locator(validate_success_css).wait_for(state="visible", timeout=10*1000)
+    else:
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+        try:
+            # 假设验证接口50ms，验证弹窗收起动画1s，验证成功提示3s。 1.1s < wait_for_timeout < 2.9s
+            page.wait_for_timeout(1.7 * 1000)
+            # 重新获取 Base64 图片数据，如果获取到了则说明验证码失败了
+            page.locator(background_css).wait_for(timeout=200)
+            print("验证不通过---不一定准确，受网络响应时间影响")
+            
+            # 验证失败了，再执行一次滑动逻辑...（可能网站验证滑动存在一定像素距离随机增减，这里使用重复校验试图通过）
+            background_filename, slider_filename = download_src_func(page, background_css, slider_css, background_size, slider_size)
+            distance_notch = get_notch_location(background_filename, slider_filename)
+            simulate_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath)
+        except PlaywrightTimeoutError as e:
+            print("验证通过---执行完毕！")
+    
 
 if __name__ == "__main__":
     ''''''
