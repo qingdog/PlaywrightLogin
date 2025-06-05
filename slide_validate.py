@@ -82,8 +82,11 @@ def get_notch_location(bg_path, hx_path):
     # 获取匹配位置的左上角坐标
     x, y = max_loc
 
-    # 显示灰度化、高斯模糊、降噪、提取边缘轮廓 后的匹配位置
-    #show_draw_notch_box(hx_path, bg_path, max_val, x, y)
+    import platform
+    os_name = platform.system()
+    if os_name == "Windows":
+        # 显示灰度化、高斯模糊、降噪、提取边缘轮廓 后的匹配位置
+        show_draw_notch_box(hx_path, bg_path, max_val, x, y)
     return x  # 返回横坐标即可
 
 
@@ -96,7 +99,7 @@ def show_draw_notch_box(hx_path, bg_path, max_val, x, y):
     # 在彩色背景图上绘制红色矩形框标记出匹配位置
     bg_img_color = cv2.imread(bg_path)  # 读取背景图片的彩色图，用于在识别结果上画出缺口位置
     cv2.rectangle(bg_img_color, (x, y), (x + w, y + h), (0, 0, 255), 2)
-
+    
     # 显示
     cv2.imshow(f'cv2-({x},{y})-{max_val}', bg_img_color)
     # 等待1秒给用户查看图片
@@ -312,7 +315,7 @@ def main(background_css, slider_css, page_url=None, page_open_func=page_open, pa
         validate(page, background_css, slider_css, page_url, page_open_func, page_evaluate, 
          download_src_func, background_size, slider_size, slider_down_css_xpath, distance_correction)
 
-        page.wait_for_timeout(30 * 1000)
+        #page.wait_for_timeout(30 * 1000)
 
 def validate(page, background_css, slider_css, page_url=None, page_open_func=page_open, page_evaluate="document.baseURI", 
          download_src_func=download_src, background_size=None, slider_size=None, slider_down_css_xpath=None, distance_correction=0):
@@ -335,9 +338,10 @@ def validate(page, background_css, slider_css, page_url=None, page_open_func=pag
     simulate_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath)
 
     try:
-        page.wait_for_timeout(2 * 1000)
+        #page.wait_for_timeout(2 * 1000)
+        page.wait_for_timeout(1.5 * 1000)
         # 重新获取 Base64 图片数据，如果获取到了则说明验证码失败了
-        page.locator(background_css).wait_for(timeout=2000)
+        page.locator(background_css).wait_for(timeout=500)
         # 验证失败了，再执行一次滑动逻辑...
         background_filename, slider_filename = download_src_func(page, background_css, slider_css, background_size, slider_size)
         distance_notch = get_notch_location(background_filename, slider_filename)
@@ -370,7 +374,7 @@ if __name__ == "__main__":
           }
         });
     """
-    #main(page_url="http://192.168.50.227/login?redirect=/index", page_evaluate=js, background_css="div.verify-img-panel img", slider_css="div.verify-sub-block img", background_size=(400, 200), slider_size=(60, 200))
+    main(page_url="http://192.168.50.227/login?redirect=/index", page_evaluate=js, background_css="div.verify-img-panel img", slider_css="div.verify-sub-block img", background_size=(400, 200), slider_size=(60, 200))
     
     ''''''
     js = """
@@ -387,6 +391,6 @@ if __name__ == "__main__":
           }
         });
     """
-    main(page_url="https://api.ephone.chat/login?expired=true", page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-12)
+    #main(page_url="https://api.ephone.chat/login?expired=true", page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-12)
     
     #test_simulate_slider()
