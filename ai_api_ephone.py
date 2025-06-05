@@ -68,15 +68,15 @@ def run(playwright: Playwright) -> None:
         try: expect(page.locator("span.semi-toast-content-text").last).to_contain_text("验证成功")
         except Exception as e: 
             logging.error(e, exc_info=True)
-            logging.info(f"validate: {page.locator('span.semi-toast-content-text').evaluate_all('elements => elements.map(e => e.outerText)')}")
+        logging.info(f"validate: {page.locator('span.semi-toast-content-text').evaluate_all('elements => elements.map(e => e.outerText)')}")
         
         try: page.wait_for_load_state(state="load", timeout=1000)  # 最长只等待1s，不管是否load完成，就进行下一步
         except Exception as e: logging.error(e, exc_info=True)
         
-        '''
+        
         page.get_by_role("button", name=" 去签到").click()
         alert_success_locator = page.locator('div[role="alert"][aria-label="success type"]')
-        expect(alert_success_locator.last).to_contain_text("签到成功")'''
+        expect(alert_success_locator.last).to_contain_text("签到成功")
 
         # 疑似在断言时间里，产生了等待1s的行为（导致前面打印失败了，但断言成功了）。这里进行重新打印
         logging.info(f"all_outer_text: {alert_success_locator.evaluate_all("elements => elements.map(e => e.outerText)")}")
