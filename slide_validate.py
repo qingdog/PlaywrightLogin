@@ -53,9 +53,9 @@ def apply_canny(image_path):
     # return cv2.Canny(image, 30, 100)
 
 
-def get_notch_location(bg_path, hx_path):
+def match_template(bg_path, hx_path):
     """
-    识别滑块缺口的位置。
+    模板匹配，查找滑块在背景图中的位置。
     :param bg_path: 背景图片路径
     :param hx_path: 滑块图片路径
     :return: 缺口的横向位置（int）
@@ -63,30 +63,45 @@ def get_notch_location(bg_path, hx_path):
     # 融合灰度图和边缘图 - TM_CCORR_NORMED（匹配度得分更高但是不符合滑块滑动）
     # res = cv2.matchTemplate(combined_gray_edge(hx_path), combined_gray_edge(bg_path), cv2.TM_CCORR_NORMED)
     # 对滑块图和背景图都进行边缘检测后进行模板匹配，返回匹配结果矩阵
-    res = cv2.matchTemplate(apply_canny(hx_path), apply_canny(bg_path), cv2.TM_CCOEFF_NORMED)
-    # 从匹配结果中获取匹配度最高的位置
-    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-    #print(f"最大得分为：{max_val} 最佳匹配点为：{max_loc}")
-
-    ################################
-    h, w = res.shape
-    points = [
-        ((x, y), res[y, x])
-        for y in range(h)
-        for x in range(w)
+    #res = cv2.matchTemplate(apply_canny(hx_path), apply_canny(bg_path), cv2.TM_CCOEFF_NORMED)
+    methods = [
+        ('cv2.TM_CCOEFF_NORMED', cv2.TM_CCOEFF_NORMED),
+        ('cv2.TM_CCORR_NORMED', cv2.TM_CCORR_NORMED),
+        ('cv2.TM_SQDIFF_NORMED', cv2.TM_SQDIFF_NORMED)
     ]
-    sorted_points = sorted(points, key=lambda p: p[1], reverse=True)
-    for i, (pt, score) in enumerate(sorted_points[:3]):
-        print(f"{i + 1}. 匹配点: {pt}, 得分: {score}")
 
-    # 获取匹配位置的左上角坐标
-    x, y = max_loc
+    results = [] # 多个模板匹配结果集合 为置信度范围是[0,1]
+    for method_name, method in methods:
+        # 使用边缘进行匹配
+        result = cv2.matchTemplate(apply_canny(hx_path), apply_canny(bg_path), method)
+
+        if method == cv2.TM_SQDIFF_NORMED:
+            # 对于SQDIFF方法，值越小表示匹配度越高
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+            confidence = 1 - min_val  # 转换为置信度
+            match_loc = min_loc
+            print(f"使用方法: {method_name} 最小值: {min_val:.4f}, 置信度: {confidence:.4f}, 最佳匹配位置: {min_loc}")
+        else:
+            # 对于其他方法，值越大表示匹配度越高（获取匹配度最高的位置）
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+            confidence = max_val
+            match_loc = max_loc
+            print(f"使用方法: {method_name} 最大值: {max_val:.4f}, 置信度: {confidence:.4f}, 最佳匹配位置: {max_loc}")
+            
+        results.append((method_name, match_loc, confidence, result))
+        
+    # 找到置信度最高的结果
+    best_result = max(results, key=lambda x: x[2])
+    print(f"\n最佳匹配结果: 方法: {best_result[0]} 位置: {best_result[1]} 置信度: {best_result[2]:.4f}")
+
+    # 获取匹配位置的左上角坐标 返回x即可
+    x, y = best_result[1]
 
     import platform
     os_name = platform.system()
     if os_name == "Windows":
         # 显示灰度化、高斯模糊、降噪、提取边缘轮廓 后的匹配位置
-        show_draw_notch_box(hx_path, bg_path, max_val, x, y)
+        show_draw_notch_box(hx_path, bg_path, max_val=best_result[2], x=x, y=y)
     return x  # 返回横坐标即可
 
 
@@ -174,7 +189,7 @@ def simulate_slider(page: Page, distance, slider_down_css_xpath, is_bezier=False
             start=[0, 0],
             end=[distance, 0],  # Y 为 0 起止，轨迹内部自动加入偏移
             numberList=60,  # 轨迹点数量30~80
-            le=4,  # 贝塞尔曲线阶数，控制曲率复杂度	2~4
+            le=4,  # 贝塞尔曲线阶数，控制曲率复杂度    2~4
             deviation=4,   # 上下波动范围（Y轴幅度）3~10
             bias=0.4,  # 控制波动中线位置
             type=2,  # 速度类型：2 = 先快后慢（自然人滑动特性）
@@ -249,38 +264,43 @@ def page_open(page: Page, page_url, wait_until="domcontentloaded", page_evaluate
         # 等待2s后再执行
         page.wait_for_timeout(2 * 1000)
     page.evaluate(f"{page_evaluate}")
-    
 
-def download_src(page: Page, background_css, slider_css, background_size=None, slider_size=None):
+def crop_top_bottom_transparency(image, cropped_img_name="cropped_image.png", top=None, bottom=None):  
+    """裁剪图片上下透明部分，保留左右宽度不变"""
+    img = image.convert("RGBA")
+    if not top or not bottom:
+        data = np.array(img)
+        # 获取所有非透明像素的行索引（alpha > 0）
+        rows_with_content = np.where(data[:, :, 3] > 0)[0]
+
+        if len(rows_with_content) == 0:
+            return image  # 完全透明，返回原图
+
+        # 计算上下边界
+        top = rows_with_content.min()
+        bottom = rows_with_content.max()
+
+    # 裁剪图片（左=0, 上=top, 右=原宽度, 下=bottom+1）
+    cropped_img = image.crop((0, top, img.width, bottom + 1))
+    ###
+    cropped_img.save(cropped_img_name)  # 保存裁剪后的图片
+    print(f"裁剪后尺寸: {cropped_img.size}")  # (宽度, 新高度)
+
+    return cropped_img, top, bottom
+
+
+def download_src(page: Page, background_css, slider_css, background_size=None, slider_size=None, is_crop=0):
     # 替换为你的滑块图片路径和背景图路径
     background_filename = 'background.png'
     slider_filename = 'slider.png'
     # 等待图片加载
     page.wait_for_selector(background_css)
-    # 获取图片的 src 属性
-    img_src = page.get_attribute(background_css, "src")
-    #print(f"背景图片: {img_src}")
-    if "http" in img_src:
-        response = requests.get(img_src)
-        # 检查请求是否成功
-        if response.status_code == 200:
-            img = Image.open(BytesIO(response.content))
-            # 调整大小
-            if background_size: img = img.resize(background_size)
-            # 保存图像
-            img.save(background_filename)
-    else:
-        # 提取 Base64 数据（去掉前缀部分）
-        base64_str = img_src.split(',')[1]
-        image_data = base64.b64decode(base64_str)
-        img = Image.open(BytesIO(image_data))
-        if background_size: img = img.resize(background_size)
-        img.save(background_filename)
-
-    # 获取 Base64 图片数据
+    
+    # 获取 滑块Base64 图片数据
     img_src = page.get_attribute(slider_css, "src")
     #print(f"图标滑块: {img_src}")
-    if "http" in img_src:
+    top, bottom = -1, -1
+    if img_src.startswith('http'):
         response = requests.get(img_src)
         # 检查请求是否成功
         if response.status_code == 200:
@@ -289,12 +309,53 @@ def download_src(page: Page, background_css, slider_css, background_size=None, s
             if slider_size: img = img.resize(slider_size)
             # 保存图像
             img.save(slider_filename)
+            if is_crop == 1:
+                cropped_img, top, bottom = crop_top_bottom_transparency(img, slider_filename)
+    #elif img_src.startswith('data:'):
     else:
         base64_str = img_src.split(',')[1]
         image_data = base64.b64decode(base64_str)
         img = Image.open(BytesIO(image_data))
         if slider_size: img = img.resize(slider_size)
         img.save(slider_filename)
+        # 测试001
+        if is_crop == 1:
+            cropped_img, top, bottom = crop_top_bottom_transparency(img, slider_filename)
+    '''
+    # 针对滑块的高度在html标签的样式中，而不是图片为透明的滑块
+    element = page.query_selector('div.index-module_tile__8pkQD[style*="top:"]') # 使用选择器定位元素（根据类名和样式）
+    if element:
+        # 获取元素的style属性中的top值
+        style = element.get_attribute("style")
+        top = style.split("top:")[1].split("px")[0].strip()
+        print(f"元素的top值为: {top}px")
+        bottom = top + Image.open("example.jpg").height + 10
+    '''
+        
+    # 获取背景图片的 src 属性
+    img_src = page.get_attribute(background_css, "src")
+    #print(f"背景图片: {img_src}")
+    if img_src.startswith('http'):
+        response = requests.get(img_src)
+        # 检查请求是否成功
+        if response.status_code == 200:
+            img = Image.open(BytesIO(response.content))
+            # 调整大小
+            if background_size: img = img.resize(background_size)
+            # 保存图像
+            img.save(background_filename)
+            if is_crop == 1:
+                cropped_img, top, bottom = crop_top_bottom_transparency(img, background_filename, top, bottom)
+    else:
+        # 提取 Base64 数据（去掉前缀部分）
+        base64_str = img_src.split(',')[1]
+        image_data = base64.b64decode(base64_str)
+        img = Image.open(BytesIO(image_data))
+        if background_size: img = img.resize(background_size)
+        img.save(background_filename)
+        if is_crop == 1:
+            cropped_img, top, bottom = crop_top_bottom_transparency(img, background_filename, top, bottom)
+
     return background_filename, slider_filename
 
 def main(background_css, slider_css, page_url=None, page_open_func=page_open, page_evaluate="document.baseURI", 
@@ -338,7 +399,7 @@ def validate(page, background_css, slider_css, page_url=None, page_open_func=pag
     # 下载图片
     background_filename, slider_filename = download_src_func(page, background_css, slider_css, background_size, slider_size)
     # 识别滑块缺口位置
-    distance_notch = get_notch_location(background_filename, slider_filename)
+    distance_notch = match_template(background_filename, slider_filename)
     # 控制滑块模拟移动
     #simulate_slider(page, distance_notch, slider_down_css_xpath='div.yidun_slide_indicator')
     # 增加距离偏移（可选）
@@ -354,6 +415,7 @@ def validate(page, background_css, slider_css, page_url=None, page_open_func=pag
 
     if validate_success_css:
         page.locator(validate_success_css).wait_for(state="visible", timeout=10*1000)
+        print("validate_success_css验证通过---执行完毕！")
     else:
         from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
         try:
@@ -365,7 +427,7 @@ def validate(page, background_css, slider_css, page_url=None, page_open_func=pag
             
             # 验证失败了，再执行一次滑动逻辑...（可能网站验证滑动存在一定像素距离随机增减，这里使用重复校验试图通过）
             background_filename, slider_filename = download_src_func(page, background_css, slider_css, background_size, slider_size)
-            distance_notch = get_notch_location(background_filename, slider_filename)
+            distance_notch = match_template(background_filename, slider_filename)
             simulate_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath)
         except PlaywrightTimeoutError as e:
             print("验证通过---执行完毕！")
