@@ -413,24 +413,27 @@ def validate(page, background_css, slider_css, page_url=None, page_open_func=pag
     simulate_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath)
     
 
-    if validate_success_css:
-        page.locator(validate_success_css).wait_for(state="visible", timeout=10*1000)
-        print("validate_success_css验证通过---执行完毕！")
-    else:
-        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-        try:
-            # 假设验证接口50ms，验证弹窗收起动画1s，验证成功提示3s。 1.1s < wait_for_timeout < 2.9s
-            page.wait_for_timeout(1.7 * 1000)
-            # 重新获取 Base64 图片数据，如果获取到了则说明验证码失败了
-            page.locator(background_css).wait_for(timeout=200)
-            print("验证不通过---不一定准确，受网络响应时间影响")
-            
-            # 验证失败了，再执行一次滑动逻辑...（可能网站验证滑动存在一定像素距离随机增减，这里使用重复校验试图通过）
-            background_filename, slider_filename = download_src_func(page, background_css, slider_css, background_size, slider_size)
-            distance_notch = match_template(background_filename, slider_filename)
-            simulate_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath)
-        except PlaywrightTimeoutError as e:
-            print("验证通过---执行完毕！")
+    for i in ([1,2,3,4,5]):
+        if validate_success_css:
+            page.locator(validate_success_css).wait_for(state="visible", timeout=10*1000)
+            print("validate_success_css验证通过---执行完毕！")
+            break
+        else:
+            from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+            try:
+                # 假设验证接口50ms，验证弹窗收起动画1s，验证成功提示3s。 1.1s < wait_for_timeout < 2.9s
+                page.wait_for_timeout(1.7 * 1000)
+                # 重新获取 Base64 图片数据，如果获取到了则说明验证码失败了
+                page.locator(background_css).wait_for(timeout=200)
+                print("验证不通过---不一定准确，受网络响应时间影响")
+                
+                # 验证失败了，再执行一次滑动逻辑...（可能网站验证滑动存在一定像素距离随机增减，这里使用重复校验试图通过）
+                background_filename, slider_filename = download_src_func(page, background_css, slider_css, background_size, slider_size)
+                distance_notch = match_template(background_filename, slider_filename)
+                simulate_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath)
+            except PlaywrightTimeoutError as e:
+                print("验证通过---执行完毕！")
+                break
     
 
 if __name__ == "__main__":
