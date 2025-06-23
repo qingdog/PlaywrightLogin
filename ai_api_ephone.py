@@ -39,7 +39,7 @@ def run(playwright: Playwright) -> None:
             element.click(); // 点击该元素
           }
         });"""
-    slide_validate.validate(page,page_url=None, page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-12)
+    slide_validate.validate(page,page_url=None, page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-11)
     
     page.get_by_role("button", name="登录").click()
     
@@ -51,15 +51,29 @@ def run(playwright: Playwright) -> None:
     page.get_by_role("link", name=" 工作台").click()
     page.get_by_text("签到日历").click()
     logging.getLogger().setLevel(logging.INFO)
-    logging.info(page.get_by_text("👋 你好，17597658361759765836 7694当前余额").text_content())
+    
+    logging.info(page.query_selector('div.semi-spin-children div.mb-4').text_content())
     
     
     check_button = False
     try:
         try:
-            page.get_by_role("button", name=" 去签到").click()
+            page.wait_for_timeout(2 * 1000)
+            # 获取页面的视口大小
+            viewport_size = page.viewport_size
+            width = viewport_size['width']
+            height = viewport_size['height']
+            # 计算中间坐标
+            mid_x = width // 2
+            mid_y = height // 2
+            # 在中间坐标点击
+            page.mouse.click(mid_x, mid_y)
+            print('已在页面中间点击。')
+
+            page.get_by_text("签到日历").click()
+            page.get_by_role("button", name=" 去签到").click()
             js = "document.title"
-            slide_validate.validate(page,page_url=None, page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-12)
+            slide_validate.validate(page,page_url=None, page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-11)
         except TimeoutError as e:
             check_button = True
             raise e
@@ -74,7 +88,7 @@ def run(playwright: Playwright) -> None:
         except Exception as e: logging.error(e, exc_info=True)
         
         
-        page.get_by_role("button", name=" 去签到").click()
+        page.get_by_role("button", name=" 去签到").click()
         alert_success_locator = page.locator('div[role="alert"][aria-label="success type"]')
         expect(alert_success_locator.last).to_contain_text("签到成功")
 
@@ -87,9 +101,13 @@ def run(playwright: Playwright) -> None:
         else:
             logging.error(e, exc_info=True)
     finally:
-        try: page.wait_for_load_state(state="networkidle", timeout=1000)  # 1s后超时
+        try: page.wait_for_load_state(state="networkidle", timeout=3000)  # 3s后超时
         except Exception as e: logging.error(e, exc_info=True)
-        logging.info(page.get_by_text("👋 你好，17597658361759765836 7694当前余额").text_content())
+        logging.info(page.query_selector('div.semi-spin-children div.mb-4').text_content())
+        
+        #page.reload(wait_until="networkidle")
+        #logging.info(page.query_selector('div.semi-spin-children div.mb-4').text_content())
+
 
     page.wait_for_timeout(20 * 1000)
     # ---------------------
