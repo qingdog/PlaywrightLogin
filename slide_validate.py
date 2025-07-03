@@ -1,4 +1,4 @@
-# pip install opencv-python playwright
+# pip install opencv-python playwright requests python-dotenv pillow psutil #v2.0 三个匹配方法
 import base64
 import logging
 import random
@@ -12,8 +12,137 @@ from playwright.sync_api import sync_playwright, Page, ElementHandle
 import psutil
 import os
 
+import pandas as pd
+import math
 
-# 定义不同的边缘处理方法和匹配方法组合来测试
+### 匹配方法1 通过图片轮廓获取缺口位置 开始================================
+# 计算 dx（梯度）图像中的中位数，用于后续判断
+def get_dx_median(dx, x, y, w, h): 
+    """
+    dx：二维数组，是图像在 x 方向上的梯度信息。
+    x：矩形区域在x轴上的起始位置。
+    y：矩形区域在y轴上的起始位置。
+    w：矩形区域的宽度（x轴方向的长度）。
+    h：矩形区域的高度（y轴方向的长度）。
+    """
+    # 通过切片提取出矩形区域，从纵坐标y开始获取h行，取第x列的坐标的二维数组
+    dx_x = dx[y:(y + h), x]
+    # median将二维数组（只有一列），会自动将其展平成一维来计算整体的中位数
+    return np.median(dx_x)
+
+def get_img_contour(img, thresh_min=127, thresh_max=255):
+    """获取图像的所有轮廓点
+        img: 输入图像
+        thresh_min: 最小阈值，默认值127
+        thresh_max: 最大阈值，默认值255
+    """    
+    # 将图像转换为灰度图像
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # cv2.COLOR_BGR2GRAY: BGR转为灰度图
+    
+    # 将灰度图像转为二值图像（阈值处理） # 127 是阈值，255 是最大值
+    _, img_binary = cv2.threshold(img_gray, thresh_min, thresh_max, cv2.THRESH_BINARY)  
+    # 查找二值图像中的轮廓,层次结构 RETR_TREE 表示查找所有轮廓，并建立层级结构 CHAIN_APPROX_NONE 表示存储所有轮廓点
+    contours, hierarchy = cv2.findContours(img_binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    return contours
+
+def to_pack_df_data(img, contours, rect_area_min, rect_area_max):
+    contour_area_min, contour_area_max = rect_area_min, rect_area_max
+    if contour_area_min <= 0: contour_area_min = 1
+    
+    # 用来保存每个轮廓的不同特征值
+    contour_infos = []  # 用于存储每个轮廓的详细信息
+    for i, contour in enumerate(contours):
+        contour_area = cv2.contourArea(contour)
+        # 如果轮廓面积小于5000或者大于25000，跳过该轮廓（正方形长小于70或者大于160）
+        if contour_area < contour_area_min or contour_area > contour_area_max:
+            # 消减轮廓列表的数量
+            continue
+        print(contour_area ** 0.5)
+        # 获取轮廓的外接矩形（即最小包围矩形）
+        x, y, w, h = cv2.boundingRect(contour)
+
+        # 保存轮廓的各种特征
+        contour_info = {'rect_arclength': 2 * (w + h),  # 矩形周长
+                        'rect_area': w * h,  # 矩形面积
+                        'contour_area': cv2.contourArea(contour),  # 轮廓面积
+                        'contour_arclength': cv2.arcLength(contour, True),  # 轮廓周长
+                        'contour': contour,  # 轮廓本身
+                        'w': w,  # 矩形的宽度
+                        'h': h,  # 矩形的高度
+                        'x': x,  # 矩形左上角的x坐标
+                        'y': y,  # 矩形左上角的y坐标
+                        # 通过 np.mean() 函数，对整个矩形区域的 np.min() 结果进行平均，得到一个单一的数值，表示该矩形区域内最小颜色值的平均亮度。（即缺口）
+                        'mean': np.mean(np.min(img[y:(y + h), x:(x + w)], axis=2)),  
+                       }
+        contour_infos.append(contour_info)
+    # 返回预处理后的图像和轮廓信息
+    if not contour_infos:
+        raise ValueError("contour_infos 为空，不能对轮廓进行过滤及获取横坐标，疑似提取图像轮廓的数值有误，请修改参数如最小轮廓面积！")
+    return contour_infos
+
+def to_dataframe_filter(img, contours, dx, x_left_width=30, area_contour_ratio_min=2, rect_area_min=(56-20)**2, rect_area_max=(56+20)**2):
+    contour_infos = to_pack_df_data(img, contours, rect_area_min, rect_area_max)
+    
+    # 将轮廓信息转换为 DataFrame 以便分析
+    df = pd.DataFrame(contour_infos)  # 转置，使得轮廓信息成为行
+    # 计算每个轮廓区域的 dx 中位数，并将其添加到 DataFrame 中
+    df['dx_mean'] = df.apply(lambda v: get_dx_median(dx, v['x'], v['y'], v['w'], v['h']), axis=1)
+    # 计算矩形的长宽比
+    df['rect_ratio'] = df.apply(lambda v: v['rect_arclength'] / 4 / math.sqrt(v['rect_area'] + 1), axis=1)
+    # 计算矩形区域与轮廓区域的面积比
+    df['area_ratio'] = df.apply(lambda v: v['rect_area'] / v['contour_area'], axis=1)
+    # 根据长宽比与矩形的得分差计算分数
+    df['score'] = df.apply(lambda x: abs(x['rect_ratio'] - 1), axis=1)
+
+    contour_result_dataframe = (df.query(f'x>{x_left_width}')                    # 查询矩形左上角 x 坐标大于 0 的轮廓
+                                  .query(f'area_ratio<{area_contour_ratio_min}') # 轮廓最小矩形的面积与轮廓的面积的比值小于2的轮廓。即查询接近于矩形的轮廓
+                                  .query(f'rect_area>{rect_area_min}')           # 查询条件筛选出矩形面积大于 5000，矩形的面积小于 20000。筛选出面积一定范围内的矩形，避免误识别
+                                  .query(f'rect_area<{rect_area_max}')           # 矩形的面积小于 20000
+                                  # mean：矩形内像素的平均值。排序时，mean 较小的矩形会被排在前面（假设更小的平均值代表更符合某些要求的区域）
+                                  # score：计算出的矩形的得分。这个得分越小表示轮廓接近于矩形
+                                  # dx_mean：表示矩形区域的 x 方向的梯度的中位数。梯度的变化可能有助于判断轮廓的质量或特征。
+                                  .sort_values(['mean', 'score', 'dx_mean'])     
+                                  .head(2))
+    if len(contour_result_dataframe) == 0:
+        raise ValueError("contour_result_dataframe 为空，对轮廓进行过滤的数值有误，请修改参数如最小矩形面积！")
+    return contour_result_dataframe
+    
+def opencv2_find_contours_location(img_path, x_left_width=0, area_contour_ratio_min=2, contour_area_min=40**2, contour_area_max=80**2):
+    """主函数，处理图像并计算每个轮廓的得分。返回横坐标（图像左侧到轮廓（缺口）的距离）"""
+
+    # 检查文件是否存在
+    if not os.path.exists(img_path):
+        print("文件不存在")
+        return 0
+        
+    # 读取图像
+    img = cv2.imread(img_path, 1)  # 1 表示读取彩色图像
+    
+    # 计算图像的 Sobel 梯度图像，用于后续特征分析。表示图像亮度的水平变化率，这种梯度信息在边缘检测、图像分割、特征提取等任务中具有重要应用
+    dx = cv2.Sobel(img, -1, 1, 0, ksize=5)
+
+    contour_result_dataframe = to_dataframe_filter(img, get_img_contour(img), dx, x_left_width=x_left_width, area_contour_ratio_min=area_contour_ratio_min, rect_area_min=contour_area_min, rect_area_max=contour_area_max)
+    # 如果有符合条件的结果，返回筛选出来的结果
+    x_left = contour_result_dataframe.x.values[0]
+    
+    show_img(img, x_left, contour_result_dataframe.rect_area.values)
+    return contour_result_dataframe.x.values[0], contour_result_dataframe.x.values.tolist() # TO
+
+def show_img(img, x_left, rect_area):
+    # 获取图像的高度和宽度
+    hight, w = img.shape[:2]
+    cv2.line(img, (x_left, 0), (x_left, hight), color=(255, 0, 255))
+    
+    import matplotlib.pyplot as plt
+    plt.title(f"Rectangular area: {rect_area}")  # 设置图像显示的标题
+    plt.imshow(img)
+    plt.show(block=False)  # 使用block=False非阻塞显示
+    # 暂停 2 秒后关闭图像
+    plt.pause(2)
+    plt.close()  # 关闭当前图像
+### 通过图片轮廓获取位置 结束===========================================
+
+### 废弃 定义不同的边缘处理方法和匹配方法组合来测试
 def adaptive_canny(image_path):
     """使用图像中值自适应调整 Canny 阈值（会匹配到得分更高的位置而不是滑块缺口）"""
     image = cv2.imread(image_path, 0)
@@ -22,18 +151,46 @@ def adaptive_canny(image_path):
     lower = int(max(0, 0.66 * median_val))
     upper = int(min(255, 1.33 * median_val))
     return cv2.Canny(blurred, lower, upper)
-
-
 def combined_gray_edge(image_path):
     """融合灰度图和边缘图
-
     边缘不够稳定，可以组合灰度图与边缘图来辅助匹配"""
     gray = cv2.imread(image_path, 0)
-    edge = apply_canny(image_path)
+    edge = img_gray_blur_canny(image_path)
     return cv2.addWeighted(gray, 0.5, edge, 0.5, 0)
+### 废弃
+
+### 匹配方法2 通过滑块轮廓对背景图片进行模板匹配
+def create_slider_mask(slider_path, output_dir=None):
+    """预处理滑块图片，提取滑块轮廓"""
+    # 读取原图
+    slider_img = cv2.imread(slider_path, cv2.IMREAD_UNCHANGED)
+    # 转为灰度图
+    slider_gray = cv2.cvtColor(slider_img, cv2.COLOR_BGR2GRAY)
+    # 边缘检测
+    edges = cv2.Canny(slider_gray, 50, 150)
+    
+    if output_dir:cv2.imwrite(os.path.join(output_dir, "slider_edges_fixed.png"), edges)
+    else: cv2.imwrite("slider_edges_fixed.png", edges)
+
+    # 轮廓检测 cv2.RETR_EXTERNAL表示只检测外部轮廓，cv2.CHAIN_APPROX_SIMPLE用于压缩轮廓。
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # 创建掩码 创建一个与灰度图像大小相同的黑色掩码（mask），用于在后续操作中绘制轮廓。
+    mask = np.zeros_like(slider_gray)
+    # 在掩码上绘制检测到的所有轮廓，轮廓的颜色为白色（255），线条宽度为2。-1表示绘制所有轮廓。
+    cv2.drawContours(mask, contours, -1, 255, 2)
+
+    # 膨胀操作，使边缘更明显 定义一个3x3的结构元素（kernel）用于膨胀操作，数据类型为8位无符号整数
+    kernel = np.ones((3, 3), np.uint8)
+    # 对掩码应用膨胀操作，增强轮廓的效果。iterations=2表示膨胀执行两次。
+    dilated_mask = cv2.dilate(mask, kernel, iterations=2)
+    
+    if output_dir: cv2.imwrite(os.path.join(output_dir, "slider_mask_fixed.png"), dilated_mask)
+    else: cv2.imwrite("slider_mask_fixed.png", dilated_mask)
+
+    return dilated_mask
 
 
-def apply_canny(image_path):
+def img_gray_blur_canny(image_path):
     """
     对输入图像进行高斯模糊并应用 Canny 边缘检测。提取图像的边缘轮廓
 
@@ -52,29 +209,33 @@ def apply_canny(image_path):
     # 尝试提高边缘检测的敏感度
     # return cv2.Canny(image, 30, 100)
 
-
-def match_template(bg_path, hx_path):
+def opencv2_match_template_location(bg_path, slider_path, slider_mask=None):
     """
     模板匹配，查找滑块在背景图中的位置。
     :param bg_path: 背景图片路径
-    :param hx_path: 滑块图片路径
+    :param slider_path: 滑块图片路径
     :return: 缺口的横向位置（int）
     """
     # 融合灰度图和边缘图 - TM_CCORR_NORMED（匹配度得分更高但是不符合滑块滑动）
-    # res = cv2.matchTemplate(combined_gray_edge(hx_path), combined_gray_edge(bg_path), cv2.TM_CCORR_NORMED)
+    # res = cv2.matchTemplate(combined_gray_edge(slider_path), combined_gray_edge(bg_path), cv2.TM_CCORR_NORMED)
     # 对滑块图和背景图都进行边缘检测后进行模板匹配，返回匹配结果矩阵
-    #res = cv2.matchTemplate(apply_canny(hx_path), apply_canny(bg_path), cv2.TM_CCOEFF_NORMED)
+    #res = cv2.matchTemplate(img_gray_blur_canny(slider_path), img_gray_blur_canny(bg_path), cv2.TM_CCOEFF_NORMED)
     methods = [
         ('cv2.TM_CCOEFF_NORMED', cv2.TM_CCOEFF_NORMED),
         ('cv2.TM_CCORR_NORMED', cv2.TM_CCORR_NORMED),
-        ('cv2.TM_SQDIFF_NORMED', cv2.TM_SQDIFF_NORMED)
+        #('cv2.TM_SQDIFF_NORMED', cv2.TM_SQDIFF_NORMED)
     ]
 
     results = [] # 多个模板匹配结果集合 为置信度范围是[0,1]
     for method_name, method in methods:
         # 使用边缘进行匹配
-        result = cv2.matchTemplate(apply_canny(hx_path), apply_canny(bg_path), method)
-
+        if slider_mask is not None:
+            result = cv2.matchTemplate(img_gray_blur_canny(bg_path), slider_mask, method)
+        else:
+            ### 匹配方法3，直接对滑块和背景图片进行模板匹配
+            result = cv2.matchTemplate(img_gray_blur_canny(bg_path), img_gray_blur_canny(slider_path), method)
+        
+        distances_sorted = []
         if method == cv2.TM_SQDIFF_NORMED:
             # 对于SQDIFF方法，值越小表示匹配度越高
             min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
@@ -86,28 +247,40 @@ def match_template(bg_path, hx_path):
             min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
             confidence = max_val
             match_loc = max_loc
-            print(f"使用方法: {method_name} 最大值: {max_val:.4f}, 置信度: {confidence:.4f}, 最佳匹配位置: {max_loc}")
+            #print(f"使用方法: {method_name} 最大值: {max_val:.4f}, 置信度: {confidence:.4f}, 最佳匹配位置: {max_loc}")
             
-        results.append((method_name, match_loc, confidence, result))
+            # 获取所有位置的匹配度  
+            threshold = 0.09  # 根据需求设置阈值  
+            height, width = result.shape  
+            coordinates = []  
+            for y in range(height):  
+                for x in range(width):  
+                    if result[y, x] >= threshold:  # 只考虑匹配度高于阈值的位置  
+                        coordinates.append((result[y, x], x, y))  # 存储匹配度、横坐标和纵坐标  
+            # 按照匹配度降序排序  
+            coordinates.sort(key=lambda item: item[0], reverse=True)
+            # 获取按匹配度排序后的横坐标列表  
+            distances_sorted = [coord[1] for coord in coordinates]  
+
+        results.append((method_name, match_loc, confidence, distances_sorted))
         
     # 找到置信度最高的结果
     best_result = max(results, key=lambda x: x[2])
-    print(f"\n最佳匹配结果: 方法: {best_result[0]} 位置: {best_result[1]} 置信度: {best_result[2]:.4f}")
+    print(f"最佳匹配结果: 方法: {best_result[0]} 位置: {best_result[1]} 置信度: {best_result[2]:.4f}")
 
     # 获取匹配位置的左上角坐标 返回x即可
     x, y = best_result[1]
 
     import platform
     os_name = platform.system()
-    if os_name == "Windows":
-        # 显示灰度化、高斯模糊、降噪、提取边缘轮廓 后的匹配位置
-        show_draw_notch_box(hx_path, bg_path, max_val=best_result[2], x=x, y=y)
-    return x  # 返回横坐标即可
+    # 显示灰度化、高斯模糊、降噪、提取边缘轮廓 后的匹配位置
+    #if os_name == "Windows": show_draw_slider_gap(slider_path, bg_path, max_val=best_result[2], x=x, y=y)
+    return x, best_result[3] # 返回横坐标即可 return x
 
 
-def show_draw_notch_box(hx_path, bg_path, max_val, x, y):
+def show_draw_slider_gap(slider_path, bg_path, max_val, x, y):
     """红色矩形框标记出匹配位置并弹出处理后的图像窗口"""
-    slider_img = cv2.imread(hx_path, 0)  # 读取滑块图片并转换为灰度图
+    slider_img = cv2.imread(slider_path, 0)  # 读取滑块图片并转换为灰度图
     # 获取滑块图像的宽高，用于绘制矩形框
     w, h = slider_img.shape[::-1]
 
@@ -116,7 +289,7 @@ def show_draw_notch_box(hx_path, bg_path, max_val, x, y):
     cv2.rectangle(bg_img_color, (x, y), (x + w, y + h), (0, 0, 255), 2)
     
     # 显示
-    cv2.imshow(f'cv2-({x},{y})-{max_val}', bg_img_color)
+    #cv2.imshow(f'cv2-({x},{y})-{max_val}', bg_img_color)
     # 等待1秒给用户查看图片
     cv2.waitKey(1000)
     # 销毁
@@ -164,8 +337,8 @@ def get_track_list(distance):
     return tracks
 
 
-def simulate_slider(page: Page, distance, slider_down_css_xpath, is_bezier=False):
-    """simulate_slider
+def drag_slider(page: Page, distance, slider_down_css_xpath, is_bezier=False, background_css=None,slider_filename=None):
+    """
     控制滑块模拟移动。
     :param page: Playwright 页面对象
     :param distance: 移动距离（像素）
@@ -206,17 +379,39 @@ def simulate_slider(page: Page, distance, slider_down_css_xpath, is_bezier=False
         tracks = get_track_list(distance)
         # 遍历轨迹列表，逐步移动鼠标，实现“人类风格”的滑动
         print(tracks)
-        for move_x in tracks:
-            start_x += move_x
-            if move_x >= 10:
-                page.mouse.move(start_x, start_y, steps=2)  # 大步才平滑
-            else:
-                page.mouse.move(start_x, start_y, steps=1)  # 小步快速滑
+        move_x_total = 0
+        for i, move_x in enumerate(tracks):  
+            if (i + 1) % 5 == 0 and background_css: # 每5次打印一次
+                # playwright对标签元素截图会导致闪烁，这里使用截全屏再裁剪图片
+                query_selector_screenshot(page, f'background_screenshot{i}.png', background_css)
 
+                distance_notch,distance_results = opencv2_match_template_location(f"background_screenshot{i}.png", slider_filename)
+                distance_result = 0
+                for distance_result in distance_results:
+                    if abs(distance_result - distance) > 5: break
+                if abs(distance_result - move_x_total) > 5: print(f"第 {i + 1} 次循环，实际滑动{move_x_total} 识别距离{distance_notch} warning..................")
+                
+            move_x_total += move_x
+            page.mouse.move(start_x + move_x_total, start_y, steps=1)  # 小步快速滑
+            #if move_x >= 10: page.mouse.move(start_x, start_y, steps=2)  # 大步才平滑
     page.mouse.up()
 
+def query_selector_screenshot(page, background_screenshot, background_css):
+    """page.query_selector(f"{background_css}").screenshot(path=background_screenshot)"""
+    # 截图整个页面  
+    page.screenshot(path=background_screenshot, full_page=True)
+    
+    # 确保元素可见  
+    page.wait_for_selector(background_css, state='visible')
+    # 获取元素的位置信息  
+    box = page.query_selector(background_css).bounding_box()
 
-def test_simulate_slider():
+    # 使用PIL裁剪图片  
+    img = Image.open(background_screenshot)  
+    cropped_img = img.crop((box['x'], box['y'], box['x'] + box['width'], box['y'] + box['height']))  
+    cropped_img.save(background_screenshot)
+
+def test_drag_slider():
     """测试滑动"""
     def check_port(port):
         """检查端口是否被占用"""
@@ -247,7 +442,7 @@ def test_simulate_slider():
         #page.goto("http://localhost:9527/json/version")
         #page.goto("https://bot.sannysoft.com/")
         page.wait_for_timeout(5 * 1000)
-        simulate_slider(page, 223-12, slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", is_bezier=False)
+        drag_slider(page, 223-12, slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", is_bezier=False)
                 
         # 执行操作，例如获取页面标题
         print(page.title())
@@ -266,7 +461,7 @@ def page_open(page: Page, page_url, wait_until="domcontentloaded", page_evaluate
     page.evaluate(f"{page_evaluate}")
 
 def crop_top_bottom_transparency(image, cropped_img_name="cropped_image.png", top=None, bottom=None):  
-    """裁剪图片上下透明部分，保留左右宽度不变"""
+    """裁剪图片上下透明部分，保留左右宽度不变。（针对透明png滑块）"""
     img = image.convert("RGBA")
     if not top or not bottom:
         data = np.array(img)
@@ -334,6 +529,8 @@ def download_src(page: Page, background_css, slider_css, background_size=None, s
         
     # 获取背景图片的 src 属性
     img_src = page.get_attribute(background_css, "src")
+    #page.query_selector(f"{background_css}").screenshot(path='element_screenshot.png')  
+    #print("截图已保存为 element_screenshot.png")  
     #print(f"背景图片: {img_src}")
     if img_src.startswith('http'):
         response = requests.get(img_src)
@@ -360,9 +557,13 @@ def download_src(page: Page, background_css, slider_css, background_size=None, s
 
 def main(background_css, slider_css, page_url=None, page_open_func=page_open, page_evaluate="document.baseURI", 
          download_src_func=download_src, background_size=None, slider_size=None, slider_down_css_xpath=None, distance_correction=0):
+    """ 主函数，测试使用"""
     if not slider_down_css_xpath: slider_down_css_xpath = slider_css
     from playwright.sync_api import sync_playwright
-
+    # 测试用===
+    #distance_notch,distance_results = opencv2_match_template_location("background1.png", "slider0.png")
+    #return
+         
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
         context = browser.new_context(
@@ -374,14 +575,15 @@ def main(background_css, slider_css, page_url=None, page_open_func=page_open, pa
         page = context.new_page()
         
         validate(page, background_css, slider_css, page_url, page_open_func, page_evaluate, 
-         download_src_func, background_size, slider_size, slider_down_css_xpath, distance_correction)
+         download_src_func, background_size, slider_size, slider_down_css_xpath, distance_correction, None, 1)
 
         #page.wait_for_timeout(30 * 1000)
 
 def validate(page, background_css, slider_css, page_url=None, page_open_func=page_open, page_evaluate="document.baseURI", 
          download_src_func=download_src, background_size=None, slider_size=None, slider_down_css_xpath=None, distance_correction=0, 
-         validate_success_css=None):
+         validate_success_css=None, is_match_template=1):
     '''
+    过滑块校验
     :param background_css:背景图片css或xpath
     :param slider_css:滑块图片css或xpath
     :param page_open_func:可保持默认或自定义打开页面函数并执行自定义的js
@@ -392,32 +594,28 @@ def validate(page, background_css, slider_css, page_url=None, page_open_func=pag
     :param slider_down_css_xpath:滑块图片下方滑动块的css（滑块图片不能直接滑动需要使用这个）
     :param distance_correction:距离_校正（识别出缺口距离后会加上这个）
     :param validate_success_css:验证成功css（用于重试）
+    :param is_match_template: 1：cv2模板匹配 2：使用滑块掩码进行模板匹配 3：缺块轮廓大小匹配
     :return:None
     '''
-    # 打开页面
-    page_open_func(page, page_url, page_evaluate=page_evaluate)
-    # 下载图片
-    background_filename, slider_filename = download_src_func(page, background_css, slider_css, background_size, slider_size)
-    # 识别滑块缺口位置
-    distance_notch = match_template(background_filename, slider_filename)
-    # 控制滑块模拟移动
-    #simulate_slider(page, distance_notch, slider_down_css_xpath='div.yidun_slide_indicator')
-    # 增加距离偏移（可选）
-    if "dun.163.com" in page.url:
-        difference_arr = [4, 8, 12]
-        print("距离增加12像素")
-        distance_notch += 12
-    elif "api.ephone.chat" in page.url:
-        #distance_notch += -12
-        pass
-    simulate_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath)
+    page_open_func(page, page_url, page_evaluate=page_evaluate) # 打开页面
+    background_filename, slider_filename = download_src_func(page, background_css, slider_css, background_size, slider_size) # 下载图片
     
+    # 识别滑块缺口位置（模板匹配或者缺口识别）
+    if is_match_template == 1:
+        distance_notch,distance_results = opencv2_match_template_location(background_filename, slider_filename)
+    elif is_match_template == 2:
+        distance_notch,distance_results = opencv2_match_template_location(background_filename, slider_filename, create_slider_mask(slider_filename))
+    else:
+        distance_notch,distance_results = opencv2_find_contours_location(background_filename)
+    
+    # 控制滑块模拟移动
+    drag_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath, background_css=background_css,slider_filename=slider_filename)
 
     for i in ([1,2,3,4,5]):
         if validate_success_css:
             page.locator(validate_success_css).wait_for(state="visible", timeout=10*1000)
             print("validate_success_css验证通过---执行完毕！")
-            break
+            return distance_notch
         else:
             from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
             try:
@@ -429,11 +627,11 @@ def validate(page, background_css, slider_css, page_url=None, page_open_func=pag
                 
                 # 验证失败了，再执行一次滑动逻辑...（可能网站验证滑动存在一定像素距离随机增减，这里使用重复校验试图通过）
                 background_filename, slider_filename = download_src_func(page, background_css, slider_css, background_size, slider_size)
-                distance_notch = match_template(background_filename, slider_filename)
-                simulate_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath)
+                distance_notch,distance_results = opencv2_match_template_location(background_filename, slider_filename)
+                drag_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath)
             except PlaywrightTimeoutError as e:
                 print("验证通过---执行完毕！")
-                break
+                return distance_notch
     
 
 if __name__ == "__main__":
@@ -449,7 +647,7 @@ if __name__ == "__main__":
         setTimeout(() => {
         document.querySelectorAll('div.u-fitem-capt button.tcapt-bind_btn--login')[0].click();}, 200);
     """
-    #main(page_url="https://dun.163.com/trial/jigsaw", background_css="img.yidun_bg-img", slider_css="img.yidun_jigsaw", page_evaluate=js, background_size=(320,160), slider_size=[61, 160])
+    #main(page_url="https://dun.163.com/trial/jigsaw", background_css="img.yidun_bg-img", slider_css="img.yidun_jigsaw", page_evaluate=js, background_size=(320,160), slider_size=[61, 160], distance_correction=12)
     
     ''''''
     js = """
@@ -480,4 +678,4 @@ if __name__ == "__main__":
     """
     #main(page_url="https://api.ephone.chat/login?expired=true", page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-12)
     
-    #test_simulate_slider()
+    #test_drag_slider()
