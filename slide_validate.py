@@ -1,4 +1,4 @@
-# pip install opencv-python playwright requests python-dotenv pillow psutil #v2.0 三个匹配方法
+# pip install opencv-python playwright requests python-dotenv pillow psutil pandas #v2.0 三个匹配方法
 import base64
 import logging
 import random
@@ -12,7 +12,6 @@ from playwright.sync_api import sync_playwright, Page, ElementHandle
 import psutil
 import os
 
-import pandas as pd
 import math
 
 ### 匹配方法1 通过图片轮廓获取缺口位置 开始================================
@@ -81,6 +80,8 @@ def to_pack_df_data(img, contours, rect_area_min, rect_area_max):
     return contour_infos
 
 def to_dataframe_filter(img, contours, dx, x_left_width=30, area_contour_ratio_min=2, rect_area_min=(56-20)**2, rect_area_max=(56+20)**2):
+    import pandas as pd
+
     contour_infos = to_pack_df_data(img, contours, rect_area_min, rect_area_max)
     
     # 将轮廓信息转换为 DataFrame 以便分析
