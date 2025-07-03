@@ -108,7 +108,7 @@ def run(playwright: Playwright) -> None:
     finally:
         try: 
             page.wait_for_load_state(state="networkidle", timeout=3000)  # 3s后超时
-            page.reload(wait_until="networkidle", , timeout=3000) # 先等待网络空闲，再执行reload刷新页面，再等3s之内网络空闲
+            page.reload(wait_until="networkidle" , timeout=3000) # 先等待网络空闲，再执行reload刷新页面，再等3s之内网络空闲
         except Exception as e: logging.error(e, exc_info=True)
         logging.info(page.query_selector('div.semi-spin-children div.mb-4').text_content())
 
