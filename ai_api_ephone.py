@@ -11,7 +11,7 @@ from find_chrome_util import find_chrome_util
 def run(playwright: Playwright) -> None:
     browser = playwright.chromium.launch(headless=platform.system() != "Windows", executable_path=find_chrome_util())
     #context = browser.new_context(color_scheme="dark", storage_state="auth.json")
-    context = browser.new_context(color_scheme="dark", viewport={"width": 1920, "height": 1080})
+    context = browser.new_context(color_scheme="dark", viewport={"width": 1020, "height": 880})
     context.set_default_timeout(30000)  # 设置默认10s
     page = context.new_page()
     page.goto("https://api.ephone.chat/login")
@@ -59,16 +59,21 @@ def run(playwright: Playwright) -> None:
     try:
         try:
             page.wait_for_timeout(2 * 1000)
-            # 获取页面的视口大小
-            viewport_size = page.viewport_size
-            width = viewport_size['width']
-            height = viewport_size['height']
-            # 计算中间坐标
-            mid_x = width // 2
-            mid_y = height // 2
-            # 在中间坐标点击
-            page.mouse.click(mid_x, mid_y)
-            print('已在页面中间点击。')
+            
+            #page.set_viewport_size({'width': 1920, 'height': 1040})  # 设置合适的视口大小
+            # 获取“签到日历”元素  
+            calendar_element = page.get_by_text("签到日历")  
+            if calendar_element:  # 确保元素存在并可见  
+                bounding_box = calendar_element.bounding_box()  # 获取元素的坐标  
+                if bounding_box:  # 计算中间坐标  
+                    mid_x = bounding_box['x'] + bounding_box['width'] // 2  
+                    mid_y = bounding_box['y'] + bounding_box['height'] // 2  
+                    page.mouse.click(mid_x, mid_y)  # 使用鼠标点击中间坐标  
+                    print('已在“签到日历”上点击。')  
+                else:  
+                    print('无法获取元素的边界框。')  
+            else:  
+                print('未找到“签到日历”元素。')
 
             page.get_by_text("签到日历").click()
             page.get_by_role("button", name=" 去签到").click()
@@ -101,13 +106,11 @@ def run(playwright: Playwright) -> None:
         else:
             logging.error(e, exc_info=True)
     finally:
-        try: page.wait_for_load_state(state="networkidle", timeout=3000)  # 3s后超时
+        try: 
+            page.wait_for_load_state(state="networkidle", timeout=3000)  # 3s后超时
+            page.reload(wait_until="networkidle", , timeout=3000) # 先等待网络空闲，再执行reload刷新页面，再等3s之内网络空闲
         except Exception as e: logging.error(e, exc_info=True)
         logging.info(page.query_selector('div.semi-spin-children div.mb-4').text_content())
-        
-        #page.reload(wait_until="networkidle")
-        #logging.info(page.query_selector('div.semi-spin-children div.mb-4').text_content())
-
 
     page.wait_for_timeout(20 * 1000)
     # ---------------------
