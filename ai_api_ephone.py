@@ -57,25 +57,25 @@ def run(playwright: Playwright) -> None:
     
     check_button = False
     try:
-        
-        page.wait_for_timeout(2 * 1000)
-        
         #page.set_viewport_size({'width': 1920, 'height': 1040})  # 设置合适的视口大小
-        # 获取“调用次数排行”元素  
-        calendar_element = page.get_by_text("调用次数排行")  
+        # 获取“签到日历”元素  
+        calendar_element = page.get_by_text("签到日历")  
         if calendar_element:  # 确保元素存在并可见  
             bounding_box = calendar_element.bounding_box()  # 获取元素的坐标  
             if bounding_box:  # 计算中间坐标  
                 mid_x = bounding_box['x'] + bounding_box['width'] // 2  
-                mid_y = bounding_box['y'] + bounding_box['height'] // 2  
-                page.mouse.click(mid_x, mid_y)  # 使用鼠标点击中间坐标  
-                print('已在“调用次数排行”上点击。')  
+                mid_y = bounding_box['y'] + bounding_box['height'] // 2
+                page.wait_for_timeout(5 * 1000)
+                page.mouse.click(mid_x, mid_y)  # 使用鼠标点击中间坐标
+                page.wait_for_timeout(2 * 1000)
+                page.mouse.click(mid_x, mid_y)  # 使用鼠标点击中间坐标
+                print('已在“签到日历”上点击。')  
             else:  
                 print('无法获取元素的边界框。')  
         else:  
-            print('未找到“调用次数排行”元素。')
+            print('未找到“签到日历”元素。')
         
-        page.get_by_text("签到日历").click()
+        #page.get_by_text("签到日历").click()
         try:
             page.get_by_role("button", name=" 去签到").click()
             js = "document.title"
