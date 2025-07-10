@@ -11,7 +11,7 @@ from find_chrome_util import find_chrome_util
 def run(playwright: Playwright) -> None:
     browser = playwright.chromium.launch(headless=platform.system() != "Windows", executable_path=find_chrome_util())
     #context = browser.new_context(color_scheme="dark", storage_state="auth.json")
-    context = browser.new_context(color_scheme="dark", viewport={"width": 1020, "height": 880})
+    context = browser.new_context(color_scheme="dark", viewport={"width": 1920, "height": 1080})
     context.set_default_timeout(30000)  # 设置默认10s
     page = context.new_page()
     page.goto("https://api.ephone.chat/login")
@@ -57,25 +57,26 @@ def run(playwright: Playwright) -> None:
     
     check_button = False
     try:
-        try:
-            page.wait_for_timeout(2 * 1000)
-            
-            #page.set_viewport_size({'width': 1920, 'height': 1040})  # 设置合适的视口大小
-            # 获取“签到日历”元素  
-            calendar_element = page.get_by_text("签到日历")  
-            if calendar_element:  # 确保元素存在并可见  
-                bounding_box = calendar_element.bounding_box()  # 获取元素的坐标  
-                if bounding_box:  # 计算中间坐标  
-                    mid_x = bounding_box['x'] + bounding_box['width'] // 2  
-                    mid_y = bounding_box['y'] + bounding_box['height'] // 2  
-                    page.mouse.click(mid_x, mid_y)  # 使用鼠标点击中间坐标  
-                    print('已在“签到日历”上点击。')  
-                else:  
-                    print('无法获取元素的边界框。')  
+        #page.set_viewport_size({'width': 1920, 'height': 1040})  # 设置合适的视口大小
+        # 获取“签到日历”元素  
+        calendar_element = page.get_by_text("签到日历")  
+        if calendar_element:  # 确保元素存在并可见  
+            bounding_box = calendar_element.bounding_box()  # 获取元素的坐标  
+            if bounding_box:  # 计算中间坐标  
+                mid_x = bounding_box['x'] + bounding_box['width'] // 2  
+                mid_y = bounding_box['y'] + bounding_box['height'] // 2
+                page.wait_for_timeout(5 * 1000)
+                page.mouse.click(mid_x, mid_y)  # 使用鼠标点击中间坐标
+                page.wait_for_timeout(2 * 1000)
+                page.mouse.click(mid_x, mid_y)  # 使用鼠标点击中间坐标
+                print('已在“签到日历”上点击。')  
             else:  
-                print('未找到“签到日历”元素。')
-
-            page.get_by_text("签到日历").click()
+                print('无法获取元素的边界框。')  
+        else:  
+            print('未找到“签到日历”元素。')
+        
+        #page.get_by_text("签到日历").click()
+        try:
             page.get_by_role("button", name=" 去签到").click()
             js = "document.title"
             slide_validate.validate(page,page_url=None, page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-11)
