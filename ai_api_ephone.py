@@ -11,7 +11,7 @@ from find_chrome_util import find_chrome_util
 def run(playwright: Playwright) -> None:
     browser = playwright.chromium.launch(headless=platform.system() != "Windows", executable_path=find_chrome_util())
     #context = browser.new_context(color_scheme="dark", storage_state="auth.json")
-    context = browser.new_context(color_scheme="dark", viewport={"width": 1920, "height": 1080})
+    context = browser.new_context(color_scheme="dark", viewport={"width": 1920, "height": 1080}) # 为了确定UI整体布局位置
     context.set_default_timeout(30000)  # 设置默认10s
     page = context.new_page()
     page.goto("https://api.ephone.chat/login")
@@ -39,8 +39,9 @@ def run(playwright: Playwright) -> None:
             element.click(); // 点击该元素
           }
         });"""
-    slide_validate.validate(page,page_url=None, page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-11)
+    slide_validate.validate(page,page_url=None, page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=0)#-11
     
+    #page.wait_for_timeout(2*1000)
     page.get_by_role("button", name="登录").click()
     
 
