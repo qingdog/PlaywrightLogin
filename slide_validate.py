@@ -380,22 +380,50 @@ def drag_slider(page: Page, distance, slider_down_css_xpath, is_bezier=False, ba
         tracks = get_track_list(distance)
         # 遍历轨迹列表，逐步移动鼠标，实现“人类风格”的滑动
         print(tracks)
-        move_x_total = 0
-        for i, move_x in enumerate(tracks):  
-            if (i + 1) % 5 == 0 and background_css: # 每5次打印一次
+        track_total = 0
+        is_offset = False
+        for i, track in enumerate(tracks):
+            if not background_css: break
+            
+            if  len(tracks)-1 - 3 == i: # 每10次打印一次 或者最后一次
                 # playwright对标签元素截图会导致闪烁，这里使用截全屏再裁剪图片
                 query_selector_screenshot(page, f'background_screenshot{i}.png', background_css)
 
                 distance_notch,distance_results = opencv2_match_template_location(f"background_screenshot{i}.png", slider_filename)
                 distance_result = 0
                 for distance_result in distance_results:
-                    if abs(distance_result - distance) > 5: break
-                if abs(distance_result - move_x_total) > 5: print(f"第 {i + 1} 次循环，实际滑动{move_x_total} 识别距离{distance_notch} warning..................")
+                    if abs(distance_result - distance) > 5: break # 更新实际滑动
+                if abs(distance_result - track_total) > 5: 
+                    print(f"is_offset {track_total - distance_result} ，轨迹长度{track_total} 识别距离{distance_result} warning..................")
+                    #if len(tracks)-1 - 3 == i: 
+                    is_offset =  track_total - distance_result
+                    page.mouse.move(start_x + track_total + track + is_offset, start_y, steps=1)  # 小步快速滑
+                    page.mouse.move(start_x + track_total + track + is_offset + tracks[-3], start_y, steps=1)  # 小步快速滑
+                    page.mouse.move(start_x + track_total + track + is_offset + tracks[-3] + tracks[-2], start_y, steps=1)  # 小步快速滑
+                    page.mouse.move(start_x + track_total + track + is_offset + tracks[-3] + tracks[-2] + tracks[-1], start_y, steps=1)  # 小步快速滑
+                    break
+
+            track_total += track
+            page.mouse.move(start_x + track_total, start_y, steps=1)  # 小步快速滑
+            #if track >= 10: page.mouse.move(start_x, start_y, steps=2)  # 大步才平滑
+        # 弥补滑动缺失的距离
+        '''if is_offset:
+            page.wait_for_timeout(2 * 1000)
+            query_selector_screenshot(page, f'background_screenshot_last.png', background_css)
+            distance_notch,distance_results = opencv2_match_template_location(f"background_screenshot_last.png", slider_filename)
+            distance_result = 0
+            for distance_result in distance_results:
+                offset = distance_result - distance
+                if abs(offset) > 5: 
+                    print(f"补充长度 {(offset)}，轨迹长度{distance} 识别距离{distance_result} warning..................")
                 
-            move_x_total += move_x
-            page.mouse.move(start_x + move_x_total, start_y, steps=1)  # 小步快速滑
-            #if move_x >= 10: page.mouse.move(start_x, start_y, steps=2)  # 大步才平滑
+                    #track_total += track_total + distance_result
+                    page.mouse.move(start_x + track_total + is_offset, start_y, steps=1)  # 小步快速滑
+                    page.wait_for_timeout(2 * 1000)
+                    break '''
+          
     page.mouse.up()
+    #page.wait_for_timeout(10 * 1000)
 
 def query_selector_screenshot(page, background_screenshot, background_css):
     """page.query_selector(f"{background_css}").screenshot(path=background_screenshot)"""
@@ -612,13 +640,14 @@ def validate(page, background_css, slider_css, page_url=None, page_open_func=pag
     # 控制滑块模拟移动
     drag_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath, background_css=background_css,slider_filename=slider_filename)
 
-    for i in ([1,2,3,4,5]):
+    for i in ([1,2,3]):
         if validate_success_css:
             page.locator(validate_success_css).wait_for(state="visible", timeout=10*1000)
             print("validate_success_css验证通过---执行完毕！")
             return distance_notch
         else:
             from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+            #TODO 解开
             try:
                 # 假设验证接口50ms，验证弹窗收起动画1s，验证成功提示3s。 1.1s < wait_for_timeout < 2.9s
                 page.wait_for_timeout(1.7 * 1000)
@@ -629,7 +658,7 @@ def validate(page, background_css, slider_css, page_url=None, page_open_func=pag
                 # 验证失败了，再执行一次滑动逻辑...（可能网站验证滑动存在一定像素距离随机增减，这里使用重复校验试图通过）
                 background_filename, slider_filename = download_src_func(page, background_css, slider_css, background_size, slider_size)
                 distance_notch,distance_results = opencv2_match_template_location(background_filename, slider_filename)
-                drag_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath)
+                drag_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath, background_css=background_css,slider_filename=slider_filename)
             except PlaywrightTimeoutError as e:
                 print("验证通过---执行完毕！")
                 return distance_notch
@@ -648,7 +677,7 @@ if __name__ == "__main__":
         setTimeout(() => {
         document.querySelectorAll('div.u-fitem-capt button.tcapt-bind_btn--login')[0].click();}, 200);
     """
-    #main(page_url="https://dun.163.com/trial/jigsaw", background_css="img.yidun_bg-img", slider_css="img.yidun_jigsaw", page_evaluate=js, background_size=(320,160), slider_size=[61, 160], distance_correction=12)
+    #main(page_url="https://dun.163.com/trial/jigsaw", background_css="img.yidun_bg-img", slider_css="img.yidun_jigsaw", page_evaluate=js, background_size=(320,160), slider_size=[61, 160], distance_correction=0) #distance_correction=12
     
     ''''''
     js = """
@@ -677,6 +706,6 @@ if __name__ == "__main__":
           }
         });
     """
-    #main(page_url="https://api.ephone.chat/login?expired=true", page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-12)
+    #main(page_url="https://api.ephone.chat/login?expired=true", page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=0)#-12
     
     #test_drag_slider()
