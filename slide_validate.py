@@ -396,12 +396,12 @@ def drag_slider(page: Page, distance, slider_down_css_xpath, is_bezier=False, ba
                 if abs(distance_result - track_total) > 5: 
                     print(f"is_offset {track_total - distance_result} ，轨迹长度{track_total} 识别距离{distance_result} warning..................")
                     #if len(tracks)-1 - 3 == i: 
-                    is_offset =  track_total - distance_result
+                    '''is_offset =  track_total - distance_result
                     page.mouse.move(start_x + track_total + track + is_offset, start_y, steps=1)  # 小步快速滑
                     page.mouse.move(start_x + track_total + track + is_offset + tracks[-3], start_y, steps=1)  # 小步快速滑
                     page.mouse.move(start_x + track_total + track + is_offset + tracks[-3] + tracks[-2], start_y, steps=1)  # 小步快速滑
                     page.mouse.move(start_x + track_total + track + is_offset + tracks[-3] + tracks[-2] + tracks[-1], start_y, steps=1)  # 小步快速滑
-                    break
+                    break'''
 
             track_total += track
             page.mouse.move(start_x + track_total, start_y, steps=1)  # 小步快速滑
