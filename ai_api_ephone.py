@@ -9,7 +9,8 @@ from find_chrome_util import find_chrome_util
 
 
 def run(playwright: Playwright) -> None:
-    browser = playwright.chromium.launch(headless=platform.system() != "Windows", executable_path=find_chrome_util(), args=["--lang=zh-CN"])
+    #browser = playwright.chromium.launch(headless=platform.system() != "Windows", executable_path=find_chrome_util(), args=["--lang=zh-CN"])
+    browser = playwright.chromium.launch(headless=True, executable_path=find_chrome_util(), args=["--lang=zh-CN"])
     #context = browser.new_context(color_scheme="dark", storage_state="auth.json")
     context = browser.new_context(color_scheme="dark", viewport={"width": 1920, "height": 1080}) # 为了确定UI整体布局位置
     context.set_default_timeout(30000)  # 设置默认10s
@@ -30,7 +31,27 @@ def run(playwright: Playwright) -> None:
     page.get_by_role("textbox", name="用户名/邮箱").fill(os.getenv("api_ephone_name"))
     page.get_by_role("textbox", name="用户名/邮箱").press("Tab")
     page.get_by_role("textbox", name="密码").fill(os.getenv("api_ephone_pass"))'''
-    page.get_by_role("button", name="密码登录").click()
+    
+    
+    try: page.get_by_role("button", name="密码登录1").click()
+    except Exception as e: 
+        logging.error(e, exc_info=True)
+        
+        print("\n包含关键字的完整片段：")
+        print("---------------------------------------------------------------------------------------------")
+        body = page.locator("button").all()
+        for btn in body:
+            print(btn.inner_text())
+        ###
+        # 匹配包含 aaa 和 bbb 的完整片段
+        #pattern_with_keys = r"aaa.*?bbb"
+        '''pattern_with_keys = r"加载数据.*?便捷导入"
+        matches_full = re.findall(pattern_with_keys, body, flags=re.DOTALL)
+        
+        for m in matches_full:
+            import re
+            print(re.sub(f"\n(\n)+|\r\n(\r\n)+", "", m))'''
+    
     page.get_by_role("textbox", name="用户名或邮箱").click()
     page.get_by_role("textbox", name="用户名或邮箱").fill(os.getenv("api_ephone_name"))
     page.get_by_role("textbox", name="密码").click()
