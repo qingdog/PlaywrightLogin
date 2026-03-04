@@ -9,7 +9,7 @@ from find_chrome_util import find_chrome_util
 
 
 def run(playwright: Playwright) -> None:
-    browser = playwright.chromium.launch(headless=platform.system() != "Windows", executable_path=find_chrome_util())
+    browser = playwright.chromium.launch(headless=platform.system() != "Windows", executable_path=find_chrome_util(), args=["--lang=zh-CN"])
     #context = browser.new_context(color_scheme="dark", storage_state="auth.json")
     context = browser.new_context(color_scheme="dark", viewport={"width": 1920, "height": 1080}) # 为了确定UI整体布局位置
     context.set_default_timeout(30000)  # 设置默认10s
@@ -53,7 +53,12 @@ def run(playwright: Playwright) -> None:
     #page.get_by_role("button", name="登录").click()
     page.get_by_role("button", name="登录", exact=True).click()
     
+    page.wait_for_timeout(5 * 1000)
+    
     page.get_by_role("button", name="Close dialog").click()
+    
+    page.wait_for_timeout(2 * 1000)
+    
     page.get_by_role("tab", name="签到日历").click()
 
 
@@ -128,12 +133,29 @@ def run(playwright: Playwright) -> None:
         else:
             print('未找到元素。')
         '''
-        btn = page.locator("td>div.relative>div>div>div>div>div>svg").click(timeout=15000)
-        slide_validate.validate(page,page_url=None, page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=0)#-11
+        #btn = page.locator("td>div.relative>div>div>div>div>div>span").last().click()
+        btn = (
+            page.locator("td div.relative span")  # 简化选择器，只定位到关键的 span
+            .filter(has_text=re.compile(r"签到")) # 根据实际文本调整正则
+            .last # 取最后一个
+        )
+        try:
+            # wait_for 确保元素可见且可交互，避免点击失败
+            btn.wait_for(state="visible", timeout=5000)
+            btn.click()
+            print("已成功点击目标日期")
+        except Exception as e:
+            print(f"点击失败: {e}")
+            # 调试：打印一下当前匹配到的元素文本，看看选对了没
+            if btn.count() > 0:
+                print(f"匹配到的元素文本: {btn.text_content()}")
         
-        expect(page.get_by_text("Verification successful")).to_be_visible()
-        expect(page.locator("ol")).to_contain_text("Verification successful")
-        page.get_by_text("Verification successful").click()
+        slide_validate.validate(page,page_url=None, page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-12)#-11
+        
+        print(page.locator("ol").all_inner_texts())
+        
+        expect(page.get_by_text("Verification successful")).to_be_visible() # 等待可见
+        expect(page.locator("ol")).to_contain_text("Verification successful") # 文本断言
         
         #page.get_by_text("签到日历").click()
         '''try:
