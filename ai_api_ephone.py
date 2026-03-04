@@ -10,7 +10,7 @@ from find_chrome_util import find_chrome_util
 
 def run(playwright: Playwright) -> None:
     #browser = playwright.chromium.launch(headless=platform.system() != "Windows", executable_path=find_chrome_util(), args=["--lang=zh-CN"])
-    browser = playwright.chromium.launch(headless=True, executable_path=find_chrome_util(), args=["--lang=zh-CN"])
+    browser = playwright.chromium.launch(headless=True, executable_path=find_chrome_util(), args=["--lang=en-US"])
     #context = browser.new_context(color_scheme="dark", storage_state="auth.json")
     context = browser.new_context(color_scheme="dark", viewport={"width": 1920, "height": 1080}) # 为了确定UI整体布局位置
     context.set_default_timeout(30000)  # 设置默认10s
@@ -19,6 +19,12 @@ def run(playwright: Playwright) -> None:
     # 等待网络请求闲置至少 500ms，即没有新的请求发送或进行中。等待 JavaScript 运行完毕、数据加载完成
     try: page.wait_for_load_state(state="networkidle", timeout=5000)  # 5s后超时
     except Exception as e: logging.error(e, exc_info=True)
+    
+    try:
+        page.get_by_role("button", name="Switch language").click()
+        page.get_by_role("menuitem", name="简体中文").click()
+    except Exception as e: 
+        logging.error(e, exc_info=True)
 
     # page.get_by_role("button", name="今日不再提醒").click()
     # page.get_by_role("button", name="确定").click()
@@ -33,7 +39,7 @@ def run(playwright: Playwright) -> None:
     page.get_by_role("textbox", name="密码").fill(os.getenv("api_ephone_pass"))'''
     
     
-    try: page.get_by_role("button", name="密码登录1").click()
+    try: page.get_by_role("button", name="密码登录111").click()
     except Exception as e: 
         logging.error(e, exc_info=True)
         
@@ -232,4 +238,4 @@ def main():
 if __name__ == '__main__':
     main()
     # os.system("playwright codegen --load-storage=auth.json --color-scheme=dark https://api.ephone.chat/ --save-storage=auth.json")
-    # os.system("playwright codegen --color-scheme=dark https://api.ephone.chat/ ")
+    # os.system("playwright codegen --lang=en-US --color-scheme=dark https://api.ephone.chat/ ")
