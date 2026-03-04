@@ -39,7 +39,7 @@ def run(playwright: Playwright) -> None:
     page.get_by_role("textbox", name="密码").fill(os.getenv("api_ephone_pass"))'''
     
     
-    try: page.get_by_role("button", name="密码登录111").click()
+    try: page.get_by_role("button", name="密码登录").click()
     except Exception as e: 
         logging.error(e, exc_info=True)
         
