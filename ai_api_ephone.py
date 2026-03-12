@@ -10,7 +10,7 @@ from find_chrome_util import find_chrome_util
 
 def run(playwright: Playwright) -> None:
     #browser = playwright.chromium.launch(headless=platform.system() != "Windows", executable_path=find_chrome_util(), args=["--lang=zh-CN"])
-    browser = playwright.chromium.launch(headless=False, executable_path=find_chrome_util(), args=["--lang=en-US"])
+    browser = playwright.chromium.launch(headless=True, executable_path=find_chrome_util(), args=["--lang=en-US"])
     #context = browser.new_context(color_scheme="dark", storage_state="auth.json")
     context = browser.new_context(color_scheme="dark", viewport={"width": 1920, "height": 1080}) # 为了确定UI整体布局位置
     context.set_default_timeout(30000)  # 设置默认10s
