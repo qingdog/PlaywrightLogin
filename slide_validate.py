@@ -275,7 +275,7 @@ def opencv2_match_template_location(bg_path, slider_path, slider_mask=None):
     import platform
     os_name = platform.system()
     # 显示灰度化、高斯模糊、降噪、提取边缘轮廓 后的匹配位置
-    #if os_name == "Windows": show_draw_slider_gap(slider_path, bg_path, max_val=best_result[2], x=x, y=y)
+    if os_name == "Windows": show_draw_slider_gap(slider_path, bg_path, max_val=best_result[2], x=x, y=y)
     return x, best_result[3] # 返回横坐标即可 return x
 
 
@@ -290,9 +290,9 @@ def show_draw_slider_gap(slider_path, bg_path, max_val, x, y):
     cv2.rectangle(bg_img_color, (x, y), (x + w, y + h), (0, 0, 255), 2)
     
     # 显示
-    #cv2.imshow(f'cv2-({x},{y})-{max_val}', bg_img_color)
+    cv2.imshow(f'cv2-({x},{y})-{max_val}', bg_img_color)
     # 等待1秒给用户查看图片
-    cv2.waitKey(1000)
+    cv2.waitKey(3000)
     # 销毁
     cv2.destroyAllWindows()
 
@@ -336,11 +336,45 @@ def get_track_list(distance):
         tracks.append(diff)
 
     return tracks
+    
 
+def drag_slider_main(slider_css, page_evaluate, page_url, distance_correction=0, page=None):
+    """ 主函数，测试使用"""
+    from playwright.sync_api import sync_playwright
+    # 测试用===
+    #distance_notch,distance_results = opencv2_match_template_location("background1.png", "slider0.png")
+    #return
+    if not page:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False)
+            context = browser.new_context(
+                viewport={"width": 1600, "height": 900},
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+                locale="zh-CN"
+            )
+            context.route('**/*', lambda route: route.continue_())
+            page = context.new_page()
+        
+            page.goto(page_url, wait_until="domcontentloaded")
+            page.wait_for_function("document.readyState === 'complete'")
+            # 等待2s后再执行
+            page.wait_for_timeout(2 * 1000)
+            page.evaluate(page_evaluate)
+            
+            drag_slider(page, 100, slider_down_css_xpath=slider_css, is_bezier=False)
+            page.wait_for_timeout(20 * 1000)
+    else:
+        #page.goto(page_url, wait_until="domcontentloaded")
+        #page.wait_for_function("document.readyState === 'complete'")
+        # 等待2s后再执行
+        page.wait_for_timeout(2 * 1000)
+        page.evaluate(page_evaluate)
+        
+        drag_slider(page, 100, slider_down_css_xpath=slider_css, is_bezier=False)
 
-def drag_slider(page: Page, distance, slider_down_css_xpath, is_bezier=False, background_css=None,slider_filename=None):
+def drag_slider(page: Page, distance, slider_down_css_xpath, is_bezier=False, background_css=None,slider_filename=None,track_add =0):
     """
-    控制滑块模拟移动。
+    控制滑块模拟移动 v2.0
     :param page: Playwright 页面对象
     :param distance: 移动距离（像素）
     :param slider_down_css_xpath: 滑块元素的XPath或者css
@@ -380,32 +414,68 @@ def drag_slider(page: Page, distance, slider_down_css_xpath, is_bezier=False, ba
         tracks = get_track_list(distance)
         # 遍历轨迹列表，逐步移动鼠标，实现“人类风格”的滑动
         print(tracks)
-        track_total = 0
-        is_offset = False
+        current_slider_track_total = 0
         for i, track in enumerate(tracks):
-            if not background_css: break
-            
-            if  len(tracks)-1 - 3 == i: # 每10次打印一次 或者最后一次
+            print(".", end="")
+            if len(tracks) - 4 <= i: # 剩下4段滑动，但是需要重新校准距离
+                if track_add != 0: # 不走校准逻辑，继续前进
+                    current_slider_track_total += track
+                    page.mouse.move(start_x + current_slider_track_total, start_y, steps=1)  # 小步快速滑
+                    continue
+                #track_last_total += track
+                '''if abs(current_slider_distance  - current_slider_track_total) > 5: 
+                    track_add = current_slider_track_total - current_slider_distance 
+                current_slider_track_total'''
+                
                 # playwright对标签元素截图会导致闪烁，这里使用截全屏再裁剪图片
+                if not background_css: break
+                
                 query_selector_screenshot(page, f'background_screenshot{i}.png', background_css)
-
+                # 识别滑块的距离（而不是缺口）
                 distance_notch,distance_results = opencv2_match_template_location(f"background_screenshot{i}.png", slider_filename)
-                distance_result = 0
-                for distance_result in distance_results:
-                    if abs(distance_result - distance) > 5: break # 更新实际滑动
-                if abs(distance_result - track_total) > 5: 
-                    print(f"is_offset {track_total - distance_result} ，轨迹长度{track_total} 识别距离{distance_result} warning..................")
-                    #if len(tracks)-1 - 3 == i: 
-                    '''is_offset =  track_total - distance_result
-                    page.mouse.move(start_x + track_total + track + is_offset, start_y, steps=1)  # 小步快速滑
-                    page.mouse.move(start_x + track_total + track + is_offset + tracks[-3], start_y, steps=1)  # 小步快速滑
-                    page.mouse.move(start_x + track_total + track + is_offset + tracks[-3] + tracks[-2], start_y, steps=1)  # 小步快速滑
-                    page.mouse.move(start_x + track_total + track + is_offset + tracks[-3] + tracks[-2] + tracks[-1], start_y, steps=1)  # 小步快速滑
-                    break'''
+                track_last_total = distance - current_slider_track_total
+                for current_slider_distance in distance_results:
+                    # 这里假设如果 识别到的距离和 第一次实际缺口的距离小于5，则视为是同一个缺口
+                    if abs(current_slider_distance  - current_slider_track_total) <= 5:
+                        print(f"距离太近跳过：{current_slider_distance}")
+                        continue # 继续找下一个滑块的距离
+                    elif(current_slider_distance  < distance): # 识别到的距离小于 第一次实际缺口的距离时才是滑块
+                        #page.wait_for_timeout(1 * 1000)
+                        print(f"第一次识别缺口距离{distance}")
+                        print(f"第二次识别滑块距离{current_slider_distance }")
+                        print(f"滑动距离{current_slider_track_total}")
+                        print(f"剩下距离{track_last_total}")
 
-            track_total += track
-            page.mouse.move(start_x + track_total, start_y, steps=1)  # 小步快速滑
-            #if track >= 10: page.mouse.move(start_x, start_y, steps=2)  # 大步才平滑
+                        # 通过图片像素量出来的距离 可能不是实际滑动所需要的距离。这里重新校准最后需要滑动距离
+                        is_offset = current_slider_track_total - current_slider_distance
+                        #if (current_slider_track_total - current_slider_distance > 9): # 如果滑动的距离大于识别的距离9像素，说明不正常需要校准
+                        print(f"is_offset {is_offset} ，轨迹长度{current_slider_track_total} 识别距离{current_slider_distance } warning..................")
+                        track_last_total = track_last_total + is_offset 
+                        break
+                page.mouse.move(start_x + current_slider_track_total + track_last_total, start_y, steps=5) # 弥补
+                #page.wait_for_timeout(3 * 1000)
+                break
+                #if len(tracks)-1 - 3 == i: 
+                '''is_offset =  current_slider_track_total - distance_result
+                page.mouse.move(start_x + current_slider_track_total + track + is_offset, start_y, steps=1)  # 小步快速滑
+                page.mouse.move(start_x + current_slider_track_total + track + is_offset + tracks[-3], start_y, steps=1)  # 小步快速滑
+                page.mouse.move(start_x + current_slider_track_total + track + is_offset + tracks[-3] + tracks[-2], start_y, steps=1)  # 小步快速滑
+                page.mouse.move(start_x + current_slider_track_total + track + is_offset + tracks[-3] + tracks[-2] + tracks[-1], start_y, steps=1)  # 小步快速滑
+                break'''
+            else:
+                current_slider_track_total += track
+                page.mouse.move(start_x + current_slider_track_total, start_y, steps=1)  # 小步快速滑
+    #           else:
+    #               current_slider_track_total += track
+    #               page.mouse.move(start_x + current_slider_track_total, start_y, steps=4)  # 平滑
+
+        '''if track_add > 9: 
+            print(f"start============================继续移动{track_add}")
+            page.wait_for_timeout(3 * 1000)
+            page.mouse.move(start_x + distance +  track_add, start_y, steps=10)
+            print(f"end  ============================继续移动{track_add}")
+            page.wait_for_timeout(3 * 1000)'''
+            
         # 弥补滑动缺失的距离
         '''if is_offset:
             page.wait_for_timeout(2 * 1000)
@@ -417,8 +487,8 @@ def drag_slider(page: Page, distance, slider_down_css_xpath, is_bezier=False, ba
                 if abs(offset) > 5: 
                     print(f"补充长度 {(offset)}，轨迹长度{distance} 识别距离{distance_result} warning..................")
                 
-                    #track_total += track_total + distance_result
-                    page.mouse.move(start_x + track_total + is_offset, start_y, steps=1)  # 小步快速滑
+                    #current_slider_track_total += current_slider_track_total + distance_result
+                    page.mouse.move(start_x + current_slider_track_total + is_offset, start_y, steps=1)  # 小步快速滑
                     page.wait_for_timeout(2 * 1000)
                     break '''
           
@@ -610,7 +680,7 @@ def main(background_css, slider_css, page_url=None, page_open_func=page_open, pa
 
 def validate(page, background_css, slider_css, page_url=None, page_open_func=page_open, page_evaluate="document.baseURI", 
          download_src_func=download_src, background_size=None, slider_size=None, slider_down_css_xpath=None, distance_correction=0, 
-         validate_success_css=None, is_match_template=1):
+         validate_success_css=None, is_match_template=1, track_add=0):
     '''
     过滑块校验
     :param background_css:背景图片css或xpath
@@ -638,7 +708,7 @@ def validate(page, background_css, slider_css, page_url=None, page_open_func=pag
         distance_notch,distance_results = opencv2_find_contours_location(background_filename)
     
     # 控制滑块模拟移动
-    drag_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath, background_css=background_css,slider_filename=slider_filename)
+    drag_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath, background_css=background_css,slider_filename=slider_filename ,track_add=track_add)
 
     for i in ([1,2,3]):
         if validate_success_css:
@@ -658,7 +728,7 @@ def validate(page, background_css, slider_css, page_url=None, page_open_func=pag
                 # 验证失败了，再执行一次滑动逻辑...（可能网站验证滑动存在一定像素距离随机增减，这里使用重复校验试图通过）
                 background_filename, slider_filename = download_src_func(page, background_css, slider_css, background_size, slider_size)
                 distance_notch,distance_results = opencv2_match_template_location(background_filename, slider_filename)
-                drag_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath, background_css=background_css,slider_filename=slider_filename)
+                drag_slider(page, distance_notch+distance_correction, slider_down_css_xpath=slider_down_css_xpath, background_css=background_css,slider_filename=slider_filename, track_add=track_add)
             except PlaywrightTimeoutError as e:
                 print("验证通过---执行完毕！")
                 return distance_notch
@@ -677,7 +747,11 @@ if __name__ == "__main__":
         setTimeout(() => {
         document.querySelectorAll('div.u-fitem-capt button.tcapt-bind_btn--login')[0].click();}, 200);
     """
-    #main(page_url="https://dun.163.com/trial/jigsaw", background_css="img.yidun_bg-img", slider_css="img.yidun_jigsaw", page_evaluate=js, background_size=(320,160), slider_size=[61, 160], distance_correction=0) #distance_correction=12
+    main(page_url="https://dun.163.com/trial/jigsaw", background_css="img.yidun_bg-img", slider_css="img.yidun_jigsaw", page_evaluate=js, background_size=(320,160), slider_size=[61, 160], distance_correction=0) #distance_correction=12
+    
+    
+    ### 只滑动
+    #drag_slider_main(slider_css="img.yidun_jigsaw",page_evaluate=js,  page_url="https://dun.163.com/trial/jigsaw", distance_correction=0)#10
     
     ''''''
     js = """
@@ -689,7 +763,7 @@ if __name__ == "__main__":
           }
         });
     """
-    main(page_url="http://192.168.50.227/login?redirect=/index", page_evaluate=js, background_css="div.verify-img-panel img", slider_css="div.verify-sub-block img", background_size=(400, 200), slider_size=(60, 200))
+    #main(page_url="http://192.168.50.227/login?redirect=/index", page_evaluate=js, background_css="div.verify-img-panel img", slider_css="div.verify-sub-block img", background_size=(400, 200), slider_size=(60, 200))
     
     ''''''
     js = """
