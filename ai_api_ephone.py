@@ -178,14 +178,23 @@ def run(playwright: Playwright) -> None:
             print(page.locator("ol").all_inner_texts())
             
             try:
-                expect(page.get_by_text("Verification successful")).to_be_visible() # 等待可见
+                # 断言疑似存在问题：时间太短来不及断言
+                #expect(page.get_by_text("Verification successful")).to_be_visible() # 等待可见
                 expect(page.locator("ol")).to_contain_text("Verification successful") # 文本断言
             except Exception as e:
+                print(f"第一次重试：{e}")
+                btn.wait_for(state="visible", timeout=5000)
+                btn.click()
+                print("已成功点击目标日期")
                 slide_validate.validate(page,page_url=None, page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-14, track_add=-1)#-11
                 try:
                     expect(page.get_by_text("Verification successful")).to_be_visible() # 等待可见
                     expect(page.locator("ol")).to_contain_text("Verification successful") # 文本断言
                 except Exception as e:
+                    print(f"第二次重试：{e}")
+                    btn.wait_for(state="visible", timeout=5000)
+                    btn.click()
+                    print("已成功点击目标日期")
                     slide_validate.validate(page,page_url=None, page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=0)#-11
                     '''try:
                         expect(page.get_by_text("Verification successful")).to_be_visible() # 等待可见
@@ -195,7 +204,8 @@ def run(playwright: Playwright) -> None:
             print(page.locator("ol").all_inner_texts())
             
         except Exception as e:
-            print(f"点击失败: {e}")
+            print(f"疑似点击失败..")
+            logging.error(e, exc_info=True)
             # 调试：打印一下当前匹配到的元素文本，看看选对了没
             if btn.count() > 0:
                 print(f"匹配到的元素文本: {btn.text_content()}")
