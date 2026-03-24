@@ -82,7 +82,14 @@ def run(playwright: Playwright) -> None:
     
     page.wait_for_timeout(5 * 1000)
     
-    page.get_by_role("button", name="Close dialog").click()
+    try:
+        page.get_by_role("button", name="Close dialog").click()
+    except Exception as e:
+        print(e)
+    try:
+        page.get_by_role("button", name="Close dialog").click()
+    except Exception as e:
+        print(e)
     
     page.wait_for_timeout(2 * 1000)
     
