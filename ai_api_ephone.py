@@ -39,19 +39,20 @@ def run(playwright: Playwright) -> None:
     page.get_by_role("textbox", name="密码").fill(os.getenv("api_ephone_pass"))'''
     
     
-    try: page.get_by_role("button", name="密码登录").click()
+    '''try: page.get_by_role("button", name="密码登录").click()
     except Exception as e: 
         logging.error(e, exc_info=True)
         
         print("\n包含关键字的完整片段：")
         print("---------------------------------------------------------------------------------------------")
-        body = page.locator("button").all()
-        for btn in body:
-            print(btn.inner_text())
+        button_texts = page.locator("button").all_inner_texts()
+        
+        print(button_texts)
         ###
         # 匹配包含 aaa 和 bbb 的完整片段
         #pattern_with_keys = r"aaa.*?bbb"
-        '''pattern_with_keys = r"加载数据.*?便捷导入"
+        
+        pattern_with_keys = r"加载数据.*?便捷导入"
         matches_full = re.findall(pattern_with_keys, body, flags=re.DOTALL)
         
         for m in matches_full:
@@ -86,14 +87,14 @@ def run(playwright: Playwright) -> None:
         page.get_by_role("button", name="Close dialog").click()
     except Exception as e:
         print(e)
-    try:
+    '''try:
         page.get_by_role("button", name="Close dialog").click()
     except Exception as e:
-        print(e)
+        print(e)'''
     
     page.wait_for_timeout(2 * 1000)
     
-    page.get_by_role("tab", name="签到日历").click()
+    #20260420page.get_by_role("tab", name="签到日历").click()
 
 
     '''if page.get_by_role("button", name="确定").is_visible():
@@ -168,6 +169,9 @@ def run(playwright: Playwright) -> None:
             print('未找到元素。')
         '''
         #btn = page.locator("td>div.relative>div>div>div>div>div>span").last().click()
+        
+        page.get_by_role("button", name="签到").click()
+        page.wait_for_timeout(1 * 1000)
         btn = (
             page.locator("td div.relative span")  # 简化选择器，只定位到关键的 span
             .filter(has_text=re.compile(r"签到")) # 根据实际文本调整正则
@@ -182,13 +186,17 @@ def run(playwright: Playwright) -> None:
             #
             slide_validate.validate(page,page_url=None, page_evaluate=js, background_css="img.gocaptcha-module_picture__LRwbY", slider_css="div.index-module_tile__8pkQD img", background_size=(300, 220), slider_down_css_xpath="div.gocaptcha-module_dragBlock__bFlwx", distance_correction=-12, track_add=-1)#-11
             
-            print(page.locator("ol").all_inner_texts())
+            results = page.locator("ol").all_inner_texts()
+            print(results)
             
             try:
                 # 断言疑似存在问题：时间太短来不及断言
                 #expect(page.get_by_text("Verification successful")).to_be_visible() # 等待可见
-                expect(page.locator("ol")).to_contain_text("Verification successful") # 文本断言
+                #expect(page.locator("ol")).to_contain_text("Verification successful") # 文本断言
+                expect(page.locator("ol")).to_contain_text("成功") # 文本断言
             except Exception as e:
+                if "成功" in results:
+                    raise "成功！"
                 print(f"第一次重试：{e}")
                 btn.wait_for(state="visible", timeout=5000)
                 btn.click()
@@ -217,15 +225,15 @@ def run(playwright: Playwright) -> None:
             if btn.count() > 0:
                 print(f"匹配到的元素文本: {btn.text_content()}")
                 
-        print(r"page.locator('td div.relative span').all_inner_texts()==============================")
-        all_texts = page.locator("td div.relative span").all_inner_texts()
-        print(all_texts)
+        #print(r"page.locator('td div.relative span').all_inner_texts()==============================")
+        #all_texts = page.locator("td div.relative span").all_inner_texts()
+        #print(all_texts)
             
-        str_arr_join = "".join(map(str, all_texts)) 
+        '''str_arr_join = "".join(map(str, all_texts)) 
         if "签到" not in str_arr_join:
             print(f"成功！")
         else:
-            logging.error("失败！！")
+            logging.error("失败！！")'''
         
         
         #page.get_by_text("签到日历").click()
